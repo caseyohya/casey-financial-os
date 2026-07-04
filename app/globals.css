@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: #020617;
+  color: #f1f5f9;
+}
+
+.executive-card {
+  @apply bg-slate-900 border border-slate-800 rounded-lg shadow-lg;
+}
+
+.executive-input {
+  @apply bg-slate-800 border border-slate-700 rounded text-slate-100 px-3 py-2 focus:ring-2 focus:ring-executive-accent focus:border-executive-accent;
+}
+
+.executive-button {
+  @apply bg-executive-accent hover:bg-blue-600 text-white px-4 py-2 rounded font-medium transition-colors;
+}
+
+.executive-button-secondary {
+  @apply bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded font-medium transition-colors;
+}
+
+.metric-card {
+  @apply executive-card p-6 hover:border-executive-accent transition-colors;
+}
+
+.metric-value {
+  @apply text-4xl font-bold text-executive-accent mt-2;
+}
+
+.metric-label {
+  @apply text-sm text-slate-400 uppercase tracking-wide;
+}
