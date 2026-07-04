@@ -1,6 +1,16 @@
 'use client'
 
-import { TrendingUp, TrendingDown, DollarSign, PieChart, ArrowUpRight, ArrowDownLeft } from 'lucide-react'
+import {
+  TrendingUp,
+  TrendingDown,
+  PieChart,
+  ArrowUpRight,
+  ArrowDownLeft,
+  Activity,
+  Scale,
+  Droplets,
+} from 'lucide-react'
+import { formatCurrencyCompact, formatRatio } from '@/lib/finance'
 
 interface MetricsGridProps {
   netWorth: number
@@ -8,16 +18,31 @@ interface MetricsGridProps {
   totalLiabilities: number
   monthlyIncome: number
   monthlyExpenses: number
+  monthlyCashFlow: number
+  debtToAssetRatio: number | null
+  liquidityRatio: number | null
   isLoading?: boolean
 }
 
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value)
+interface KpiCardProps {
+  label: string
+  value: string
+  valueClass?: string
+  icon: React.ReactNode
+}
+
+function KpiCard({ label, value, valueClass = 'text-executive-accent', icon }: KpiCardProps) {
+  return (
+    <div className="metric-card">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="metric-label">{label}</p>
+          <p className={`metric-value text-3xl ${valueClass}`}>{value}</p>
+        </div>
+        {icon}
+      </div>
+    </div>
+  )
 }
 
 export default function MetricsGrid({
@@ -26,87 +51,79 @@ export default function MetricsGrid({
   totalLiabilities,
   monthlyIncome,
   monthlyExpenses,
+  monthlyCashFlow,
+  debtToAssetRatio,
+  liquidityRatio,
   isLoading = false,
 }: MetricsGridProps) {
-  const monthlyCashFlow = monthlyIncome - monthlyExpenses
-  const cashFlowPositive = monthlyCashFlow >= 0
-
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        {[...Array(5)].map((_, i) => (
-          <div key={i} className="metric-card h-32 animate-pulse bg-slate-800" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[...Array(8)].map((_, i) => (
+          <div key={i} className="metric-card h-28 animate-pulse bg-slate-800" />
         ))}
       </div>
     )
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-      {/* Net Worth */}
-      <div className="metric-card">
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="metric-label">Net Worth</p>
-            <p className="metric-value" style={{ color: netWorth >= 0 ? '#10b981' : '#ef4444' }}>
-              {formatCurrency(netWorth)}
-            </p>
-          </div>
-          <PieChart className="w-8 h-8 text-slate-600" />
-        </div>
-      </div>
-
-      {/* Total Assets */}
-      <div className="metric-card">
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="metric-label">Total Assets</p>
-            <p className="metric-value text-executive-success">
-              {formatCurrency(totalAssets)}
-            </p>
-          </div>
-          <TrendingUp className="w-8 h-8 text-executive-success" />
-        </div>
-      </div>
-
-      {/* Total Liabilities */}
-      <div className="metric-card">
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="metric-label">Total Liabilities</p>
-            <p className="metric-value text-executive-danger">
-              {formatCurrency(totalLiabilities)}
-            </p>
-          </div>
-          <TrendingDown className="w-8 h-8 text-executive-danger" />
-        </div>
-      </div>
-
-      {/* Monthly Income */}
-      <div className="metric-card">
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="metric-label">Monthly Income</p>
-            <p className="metric-value text-executive-success">
-              {formatCurrency(monthlyIncome)}
-            </p>
-          </div>
-          <ArrowDownLeft className="w-8 h-8 text-executive-success" />
-        </div>
-      </div>
-
-      {/* Monthly Expenses */}
-      <div className="metric-card">
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="metric-label">Monthly Expenses</p>
-            <p className="metric-value text-executive-warning">
-              {formatCurrency(monthlyExpenses)}
-            </p>
-          </div>
-          <ArrowUpRight className="w-8 h-8 text-executive-warning" />
-        </div>
-      </div>
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <KpiCard
+        label="Net Worth"
+        value={formatCurrencyCompact(netWorth)}
+        valueClass={netWorth >= 0 ? 'text-executive-success' : 'text-executive-danger'}
+        icon={<PieChart className="w-7 h-7 text-slate-600" />}
+      />
+      <KpiCard
+        label="Total Assets"
+        value={formatCurrencyCompact(totalAssets)}
+        valueClass="text-executive-success"
+        icon={<TrendingUp className="w-7 h-7 text-executive-success" />}
+      />
+      <KpiCard
+        label="Total Liabilities"
+        value={formatCurrencyCompact(totalLiabilities)}
+        valueClass="text-executive-danger"
+        icon={<TrendingDown className="w-7 h-7 text-executive-danger" />}
+      />
+      <KpiCard
+        label="Monthly Income"
+        value={formatCurrencyCompact(monthlyIncome)}
+        valueClass="text-executive-success"
+        icon={<ArrowDownLeft className="w-7 h-7 text-executive-success" />}
+      />
+      <KpiCard
+        label="Monthly Expenses"
+        value={formatCurrencyCompact(monthlyExpenses)}
+        valueClass="text-executive-warning"
+        icon={<ArrowUpRight className="w-7 h-7 text-executive-warning" />}
+      />
+      <KpiCard
+        label="Monthly Cash Flow"
+        value={formatCurrencyCompact(monthlyCashFlow)}
+        valueClass={monthlyCashFlow >= 0 ? 'text-executive-success' : 'text-executive-danger'}
+        icon={<Activity className="w-7 h-7 text-slate-600" />}
+      />
+      <KpiCard
+        label="Debt-to-Asset Ratio"
+        value={formatRatio(debtToAssetRatio, true)}
+        valueClass={
+          debtToAssetRatio !== null && debtToAssetRatio < 0.5
+            ? 'text-executive-success'
+            : 'text-executive-warning'
+        }
+        icon={<Scale className="w-7 h-7 text-slate-600" />}
+      />
+      <KpiCard
+        label="Liquidity Ratio"
+        value={formatRatio(liquidityRatio)}
+        valueClass={
+          liquidityRatio !== null && liquidityRatio >= 1
+            ? 'text-executive-success'
+            : 'text-executive-warning'
+        }
+        icon={<Droplets className="w-7 h-7 text-slate-600" />}
+      />
     </div>
   )
 }

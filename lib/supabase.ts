@@ -59,3 +59,18 @@ export type Expense = {
   frequency: string
   created_at: string
 }
+
+export type MonthlySnapshot = {
+  id: string
+  profile_id: string
+  snapshot_month: string
+  total_assets: number
+  total_liabilities: number
+  net_worth: number
+  monthly_income: number
+  monthly_expenses: number
+  monthly_cash_flow: number
+  debt_to_asset_ratio: number | null
+  liquidity_ratio: number | null
+  created_at: string
+}

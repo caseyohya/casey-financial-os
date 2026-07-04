@@ -1,4 +1,4 @@
-import { supabase, Account, Asset, Expense, IncomeSource, Liability } from '@/lib/supabase'
+import { supabase, Account, Asset, Expense, IncomeSource, Liability, MonthlySnapshot } from '@/lib/supabase'
 import { DEMO_PROFILE_ID } from '@/lib/constants'
 
 export async function loadFinancialData() {
@@ -22,5 +22,22 @@ export async function loadFinancialData() {
     liabilities: (liabilitiesRes.data || []) as Liability[],
     incomeSources: (incomeRes.data || []) as IncomeSource[],
     expenses: (expensesRes.data || []) as Expense[],
+  }
+}
+
+export async function loadFinancialDataWithSnapshots() {
+  const data = await loadFinancialData()
+
+  const { data: snapshots, error } = await supabase
+    .from('monthly_snapshots')
+    .select('*')
+    .eq('profile_id', DEMO_PROFILE_ID)
+    .order('snapshot_month', { ascending: true })
+
+  if (error) throw error
+
+  return {
+    ...data,
+    snapshots: (snapshots || []) as MonthlySnapshot[],
   }
 }

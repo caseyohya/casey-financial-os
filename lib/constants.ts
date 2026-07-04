@@ -40,4 +40,16 @@ export const NAV_ITEMS = [
   { href: '/liabilities', label: 'Liabilities' },
   { href: '/income', label: 'Income' },
   { href: '/expenses', label: 'Expenses' },
+  { href: '/report', label: 'Report' },
+] as const
+
+export const CHART_COLORS = [
+  '#0ea5e9',
+  '#10b981',
+  '#f59e0b',
+  '#ef4444',
+  '#8b5cf6',
+  '#ec4899',
+  '#14b8a6',
+  '#f97316',
 ] as const
