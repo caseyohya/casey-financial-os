@@ -1,93 +1,121 @@
+import Link from "next/link";
+import { Plus } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { DashboardCard } from "@/components/dashboard/DashboardCard";
 import { EmptyState } from "@/components/dashboard/EmptyState";
+import { InvestmentCard } from "@/components/investments/InvestmentCard";
+import { TaxSummaryPanel } from "@/components/investments/TaxSummaryPanel";
+import { ExportButtons } from "@/components/investments/ExportButtons";
 import { PieChartCard } from "@/components/charts/FinancialCharts";
+import { getPortfolioData } from "@/lib/data/investments";
+import { calculatePortfolioMetrics, calculateInvestmentMetrics } from "@/lib/calculations/investments";
 import { formatCurrency, formatPercent } from "@/lib/utils";
-import { TrendingUp } from "lucide-react";
+import { Button } from "@/components/forms/FormFields";
 
-const placeholderHoldings = [
-  { symbol: "VTI", name: "Vanguard Total Stock", type: "etf", value: 285000, weight: 44 },
-  { symbol: "AAPL", name: "Apple Inc.", type: "stock", value: 125000, weight: 19 },
-  { symbol: "MSFT", name: "Microsoft Corp.", type: "stock", value: 98000, weight: 15 },
-  { symbol: "BND", name: "Vanguard Total Bond", type: "bond", value: 87000, weight: 13 },
-  { symbol: "BTC", name: "Bitcoin", type: "crypto", value: 52500, weight: 9 },
-];
+export default async function InvestmentsPortfolioPage() {
+  const {
+    investments,
+    transactionsByInvestment,
+    distributionsByInvestment,
+    taxItemsByInvestment,
+    metalsByInvestment,
+  } = await getPortfolioData();
 
-const allocationData = placeholderHoldings.map((h) => ({
-  name: h.symbol,
-  value: h.value,
-}));
+  const portfolio = calculatePortfolioMetrics(
+    investments,
+    transactionsByInvestment,
+    distributionsByInvestment,
+    taxItemsByInvestment,
+    metalsByInvestment
+  );
 
-export default function InvestmentsPage() {
-  const totalValue = placeholderHoldings.reduce((s, h) => s + h.value, 0);
+  const investmentMetrics = investments.map((inv) => ({
+    investment: inv,
+    metrics: calculateInvestmentMetrics(
+      inv,
+      transactionsByInvestment[inv.id] ?? [],
+      distributionsByInvestment[inv.id] ?? [],
+      taxItemsByInvestment[inv.id] ?? [],
+      metalsByInvestment[inv.id] ?? []
+    ),
+  }));
+
+  const allocationData = portfolio.allocationByCategory.map((a) => ({
+    name: a.name,
+    value: a.value,
+  }));
 
   return (
     <div>
       <PageHeader
         title="Investment Platform"
-        description="Portfolio holdings, allocation, and performance — read-only tracking"
-      />
+        description="Private investments, oil & gas, startups, precious metals — manual read-only tracking"
+      >
+        <Link href="/investments/new">
+          <Button>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Investment
+          </Button>
+        </Link>
+      </PageHeader>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="Portfolio Value" value={formatCurrency(totalValue)} />
-        <MetricCard
-          label="Total Gain"
-          value={formatCurrency(142500)}
-          change={formatPercent(28.3)}
-          changeType="positive"
+      {investments.length === 0 ? (
+        <EmptyState
+          title="No investments yet"
+          description="Track private equity, venture funds, oil & gas, startups, software investments, and precious metals. No brokerage APIs — manual entry only."
+          action={
+            <Link href="/investments/new">
+              <Button>Add Investment</Button>
+            </Link>
+          }
         />
-        <MetricCard label="Holdings" value={String(placeholderHoldings.length)} />
-        <MetricCard
-          label="Day Change"
-          value={formatCurrency(3200)}
-          change={formatPercent(0.5)}
-          changeType="positive"
-        />
-      </div>
-
-      <div className="mt-8 grid gap-6 lg:grid-cols-2">
-        <DashboardCard title="Allocation" description="Portfolio breakdown by holding">
-          <PieChartCard data={allocationData} />
-        </DashboardCard>
-
-        <DashboardCard title="Holdings" description="Current positions">
-          <div className="space-y-3">
-            {placeholderHoldings.map((holding) => (
-              <div
-                key={holding.symbol}
-                className="flex items-center justify-between rounded-lg border border-navy-700 bg-navy-800 px-4 py-3"
-              >
-                <div>
-                  <p className="text-sm font-medium text-white">
-                    {holding.symbol}
-                    <span className="ml-2 text-xs font-normal text-slate-400">
-                      {holding.name}
-                    </span>
-                  </p>
-                  <p className="text-xs capitalize text-slate-500">{holding.type}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-medium text-white">
-                    {formatCurrency(holding.value)}
-                  </p>
-                  <p className="text-xs text-slate-400">{holding.weight}%</p>
+      ) : (
+        <>
+          {(["USD", "JPY"] as const).map((currency) =>
+            portfolio.byCurrency[currency].investmentCount > 0 ? (
+              <div key={currency} className="mb-8">
+                <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">
+                  {currency} Portfolio
+                </h2>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <MetricCard label="Portfolio Value" value={formatCurrency(portfolio.byCurrency[currency].totalValue, currency)} />
+                  <MetricCard label="Invested Capital" value={formatCurrency(portfolio.byCurrency[currency].totalInvested, currency)} />
+                  <MetricCard
+                    label="Unrealized Gain"
+                    value={formatCurrency(portfolio.byCurrency[currency].totalUnrealizedGain, currency)}
+                    changeType={portfolio.byCurrency[currency].totalUnrealizedGain >= 0 ? "positive" : "negative"}
+                  />
+                  <MetricCard label="Avg ROI" value={formatPercent(portfolio.byCurrency[currency].avgRoi)} />
                 </div>
               </div>
-            ))}
-          </div>
-        </DashboardCard>
-      </div>
+            ) : null
+          )}
 
-      <div className="mt-8">
-        <DashboardCard title="Add Holding" description="Manual data entry">
-          <EmptyState
-            title="Expand your portfolio"
-            description="Add stocks, ETFs, bonds, and crypto holdings manually. No trading or execution — read-only tracking only."
-            icon={<TrendingUp className="h-8 w-8" />}
-          />
-        </DashboardCard>
-      </div>
+          <div className="mt-8 grid gap-6 lg:grid-cols-2">
+            {allocationData.length > 0 && (
+              <DashboardCard title="Portfolio Allocation" description="By investment category">
+                <PieChartCard data={allocationData} />
+              </DashboardCard>
+            )}
+
+            <DashboardCard title="Investments" description={`${portfolio.totalInvestments} active positions`}>
+              <div className="space-y-4">
+                {investmentMetrics.map(({ investment, metrics }) => (
+                  <InvestmentCard key={investment.id} investment={investment} metrics={metrics} />
+                ))}
+              </div>
+            </DashboardCard>
+          </div>
+
+          <div className="mt-8 grid gap-6 lg:grid-cols-2">
+            <TaxSummaryPanel investments={investments} taxItemsByInvestment={taxItemsByInvestment} />
+            <DashboardCard title="CPA Exports" description="Annual tax summary and comprehensive CSV">
+              <ExportButtons />
+            </DashboardCard>
+          </div>
+        </>
+      )}
     </div>
   );
 }

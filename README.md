@@ -9,6 +9,7 @@ A secure personal financial dashboard platform built with Next.js, React, TypeSc
 - **Executive UI**: Dark navy theme with gold accents and clean typography
 - **Reusable components**: Dashboard cards, metrics, charts, and forms
 - **Manual data entry**: Start tracking your finances without external integrations
+- **Investment Platform**: Private equity, oil & gas, startups, precious metals, K-1 tracking, CPA exports
 - **Read-only by design**: No payments, transfers, trading, or transaction execution
 
 ## Quick Start
@@ -43,9 +44,11 @@ Edit `.env.local` with your Supabase project URL and anon key.
 
 4. Set up the database:
 
-Run `database/schema.sql` in the Supabase SQL Editor, then run `database/real-estate-schema.sql` for the Real Estate Platform tables.
+Run `database/schema.sql` in the Supabase SQL Editor, then run module schemas as needed:
+- `database/real-estate-schema.sql` — Real Estate Platform
+- `database/investment-schema.sql` — Investment Platform
 
-5. Create a Supabase Storage bucket named `property-documents` (private) for document uploads.
+5. Create Supabase Storage buckets (private): `property-documents`, `investment-documents`
 
 6. Start the development server:
 
