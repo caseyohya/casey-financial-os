@@ -17,7 +17,7 @@ CREATE TABLE profiles (
 );
 
 -- ============================================================
--- BANK ACCOUNTS (manual entry, read-only)
+-- BANK ACCOUNTS (manual entry, read-only, Plaid-ready)
 -- ============================================================
 CREATE TABLE bank_accounts (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -27,26 +27,138 @@ CREATE TABLE bank_accounts (
   account_type TEXT NOT NULL CHECK (account_type IN ('checking', 'savings', 'credit', 'loan', 'other')),
   balance NUMERIC(15, 2) NOT NULL DEFAULT 0,
   currency TEXT NOT NULL DEFAULT 'USD',
+  country TEXT NOT NULL DEFAULT 'US' CHECK (country IN ('US', 'JP')),
+  exchange_rate_to_usd NUMERIC(15, 6),
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  data_source TEXT NOT NULL DEFAULT 'manual' CHECK (data_source IN ('manual', 'csv', 'plaid')),
+  plaid_item_id TEXT,
+  plaid_account_id TEXT,
+  last_synced_at TIMESTAMPTZ,
   notes TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- ============================================================
--- TRANSACTIONS (manual entry, read-only — no execution)
+-- TRANSACTION CATEGORIES
 -- ============================================================
-CREATE TABLE transactions (
+CREATE TABLE transaction_categories (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  transaction_type TEXT NOT NULL
+    CHECK (transaction_type IN ('income', 'expense', 'transfer', 'investment')),
+  color TEXT DEFAULT '#64748b',
+  is_system BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (user_id, name)
+);
+
+-- ============================================================
+-- IMPORT FILES (CSV upload tracking)
+-- ============================================================
+CREATE TABLE import_files (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  account_id UUID REFERENCES bank_accounts(id) ON DELETE SET NULL,
+  filename TEXT NOT NULL,
+  file_size INTEGER,
+  column_mapping JSONB,
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'mapped', 'imported', 'failed')),
+  row_count INTEGER NOT NULL DEFAULT 0,
+  imported_count INTEGER NOT NULL DEFAULT 0,
+  error_message TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ============================================================
+-- RECURRING TRANSACTIONS
+-- ============================================================
+CREATE TABLE recurring_transactions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   account_id UUID NOT NULL REFERENCES bank_accounts(id) ON DELETE CASCADE,
   description TEXT NOT NULL,
   amount NUMERIC(15, 2) NOT NULL,
-  category TEXT NOT NULL DEFAULT 'uncategorized',
+  currency TEXT NOT NULL DEFAULT 'USD',
+  exchange_rate_to_usd NUMERIC(15, 6),
+  transaction_type TEXT NOT NULL
+    CHECK (transaction_type IN ('income', 'expense', 'transfer', 'investment')),
+  category_id UUID REFERENCES transaction_categories(id) ON DELETE SET NULL,
+  frequency TEXT NOT NULL DEFAULT 'monthly'
+    CHECK (frequency IN ('weekly', 'biweekly', 'monthly', 'quarterly', 'yearly')),
+  next_occurrence DATE,
+  last_occurrence DATE,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  data_source TEXT NOT NULL DEFAULT 'manual'
+    CHECK (data_source IN ('manual', 'csv', 'plaid')),
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ============================================================
+-- BANK BALANCES (balance history)
+-- ============================================================
+CREATE TABLE bank_balances (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  account_id UUID NOT NULL REFERENCES bank_accounts(id) ON DELETE CASCADE,
+  balance NUMERIC(15, 2) NOT NULL,
+  balance_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  currency TEXT NOT NULL DEFAULT 'USD',
+  exchange_rate_to_usd NUMERIC(15, 6),
+  notes TEXT,
+  data_source TEXT NOT NULL DEFAULT 'manual'
+    CHECK (data_source IN ('manual', 'csv', 'plaid')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ============================================================
+-- BANK TRANSACTIONS (manual entry, read-only — no execution)
+-- ============================================================
+CREATE TABLE bank_transactions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  account_id UUID NOT NULL REFERENCES bank_accounts(id) ON DELETE CASCADE,
+  description TEXT NOT NULL,
+  amount NUMERIC(15, 2) NOT NULL,
+  currency TEXT NOT NULL DEFAULT 'USD',
+  exchange_rate_to_usd NUMERIC(15, 6),
+  transaction_type TEXT NOT NULL DEFAULT 'expense'
+    CHECK (transaction_type IN ('income', 'expense', 'transfer', 'investment')),
+  category_id UUID REFERENCES transaction_categories(id) ON DELETE SET NULL,
+  category_name TEXT NOT NULL DEFAULT 'uncategorized',
   transaction_date DATE NOT NULL DEFAULT CURRENT_DATE,
-  is_income BOOLEAN NOT NULL DEFAULT FALSE,
+  is_recurring BOOLEAN NOT NULL DEFAULT FALSE,
+  recurring_transaction_id UUID REFERENCES recurring_transactions(id) ON DELETE SET NULL,
+  import_file_id UUID REFERENCES import_files(id) ON DELETE SET NULL,
+  external_id TEXT,
+  data_source TEXT NOT NULL DEFAULT 'manual'
+    CHECK (data_source IN ('manual', 'csv', 'plaid')),
   notes TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ============================================================
+-- MONTHLY CASH FLOW (aggregated)
+-- ============================================================
+CREATE TABLE cash_flow_monthly (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  year INTEGER NOT NULL,
+  month INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
+  currency TEXT NOT NULL DEFAULT 'USD',
+  total_income NUMERIC(15, 2) NOT NULL DEFAULT 0,
+  total_expenses NUMERIC(15, 2) NOT NULL DEFAULT 0,
+  total_transfers NUMERIC(15, 2) NOT NULL DEFAULT 0,
+  total_investments NUMERIC(15, 2) NOT NULL DEFAULT 0,
+  net_cash_flow NUMERIC(15, 2) NOT NULL DEFAULT 0,
+  exchange_rate_to_usd NUMERIC(15, 6),
+  computed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (user_id, year, month, currency)
 );
 
 -- ============================================================
@@ -123,9 +235,19 @@ CREATE TABLE net_worth_snapshots (
 -- INDEXES
 -- ============================================================
 CREATE INDEX idx_bank_accounts_user_id ON bank_accounts(user_id);
-CREATE INDEX idx_transactions_user_id ON transactions(user_id);
-CREATE INDEX idx_transactions_account_id ON transactions(account_id);
-CREATE INDEX idx_transactions_date ON transactions(transaction_date);
+CREATE INDEX idx_bank_accounts_country ON bank_accounts(country);
+CREATE INDEX idx_transaction_categories_user_id ON transaction_categories(user_id);
+CREATE INDEX idx_import_files_user_id ON import_files(user_id);
+CREATE INDEX idx_recurring_transactions_user_id ON recurring_transactions(user_id);
+CREATE INDEX idx_bank_balances_user_id ON bank_balances(user_id);
+CREATE INDEX idx_bank_balances_account_id ON bank_balances(account_id);
+CREATE INDEX idx_bank_balances_date ON bank_balances(balance_date);
+CREATE INDEX idx_bank_transactions_user_id ON bank_transactions(user_id);
+CREATE INDEX idx_bank_transactions_account_id ON bank_transactions(account_id);
+CREATE INDEX idx_bank_transactions_date ON bank_transactions(transaction_date);
+CREATE INDEX idx_bank_transactions_type ON bank_transactions(transaction_type);
+CREATE INDEX idx_cash_flow_monthly_user_id ON cash_flow_monthly(user_id);
+CREATE INDEX idx_cash_flow_monthly_period ON cash_flow_monthly(year, month);
 CREATE INDEX idx_real_estate_user_id ON real_estate_properties(user_id);
 CREATE INDEX idx_investment_holdings_user_id ON investment_holdings(user_id);
 CREATE INDEX idx_tax_records_user_id ON tax_records(user_id);
@@ -136,7 +258,12 @@ CREATE INDEX idx_net_worth_user_id ON net_worth_snapshots(user_id);
 -- ============================================================
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bank_accounts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE transaction_categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE import_files ENABLE ROW LEVEL SECURITY;
+ALTER TABLE recurring_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bank_balances ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bank_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cash_flow_monthly ENABLE ROW LEVEL SECURITY;
 ALTER TABLE real_estate_properties ENABLE ROW LEVEL SECURITY;
 ALTER TABLE investment_holdings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tax_records ENABLE ROW LEVEL SECURITY;
@@ -158,14 +285,64 @@ CREATE POLICY "Users can update own accounts" ON bank_accounts
 CREATE POLICY "Users can delete own accounts" ON bank_accounts
   FOR DELETE USING (auth.uid() = user_id);
 
--- Transactions
-CREATE POLICY "Users can view own transactions" ON transactions
+-- Transaction categories
+CREATE POLICY "Users can view own categories" ON transaction_categories
   FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can insert own transactions" ON transactions
+CREATE POLICY "Users can insert own categories" ON transaction_categories
   FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can update own transactions" ON transactions
+CREATE POLICY "Users can update own categories" ON transaction_categories
   FOR UPDATE USING (auth.uid() = user_id);
-CREATE POLICY "Users can delete own transactions" ON transactions
+CREATE POLICY "Users can delete own categories" ON transaction_categories
+  FOR DELETE USING (auth.uid() = user_id);
+
+-- Import files
+CREATE POLICY "Users can view own import files" ON import_files
+  FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own import files" ON import_files
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own import files" ON import_files
+  FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own import files" ON import_files
+  FOR DELETE USING (auth.uid() = user_id);
+
+-- Recurring transactions
+CREATE POLICY "Users can view own recurring" ON recurring_transactions
+  FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own recurring" ON recurring_transactions
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own recurring" ON recurring_transactions
+  FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own recurring" ON recurring_transactions
+  FOR DELETE USING (auth.uid() = user_id);
+
+-- Bank balances
+CREATE POLICY "Users can view own balances" ON bank_balances
+  FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own balances" ON bank_balances
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own balances" ON bank_balances
+  FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own balances" ON bank_balances
+  FOR DELETE USING (auth.uid() = user_id);
+
+-- Bank transactions
+CREATE POLICY "Users can view own bank transactions" ON bank_transactions
+  FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own bank transactions" ON bank_transactions
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own bank transactions" ON bank_transactions
+  FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own bank transactions" ON bank_transactions
+  FOR DELETE USING (auth.uid() = user_id);
+
+-- Cash flow monthly
+CREATE POLICY "Users can view own cash flow" ON cash_flow_monthly
+  FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own cash flow" ON cash_flow_monthly
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own cash flow" ON cash_flow_monthly
+  FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own cash flow" ON cash_flow_monthly
   FOR DELETE USING (auth.uid() = user_id);
 
 -- Real estate
@@ -243,6 +420,41 @@ CREATE TRIGGER profiles_updated_at BEFORE UPDATE ON profiles
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER bank_accounts_updated_at BEFORE UPDATE ON bank_accounts
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER import_files_updated_at BEFORE UPDATE ON import_files
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER recurring_transactions_updated_at BEFORE UPDATE ON recurring_transactions
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- ============================================================
+-- DEFAULT TRANSACTION CATEGORIES ON SIGNUP
+-- ============================================================
+CREATE OR REPLACE FUNCTION seed_default_transaction_categories()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO transaction_categories (user_id, name, transaction_type, color, is_system) VALUES
+    (NEW.id, 'Salary', 'income', '#10b981', TRUE),
+    (NEW.id, 'Freelance', 'income', '#059669', TRUE),
+    (NEW.id, 'Investment Income', 'income', '#34d399', TRUE),
+    (NEW.id, 'Other Income', 'income', '#6ee7b7', TRUE),
+    (NEW.id, 'Housing', 'expense', '#ef4444', TRUE),
+    (NEW.id, 'Food & Dining', 'expense', '#f97316', TRUE),
+    (NEW.id, 'Transportation', 'expense', '#eab308', TRUE),
+    (NEW.id, 'Utilities', 'expense', '#a855f7', TRUE),
+    (NEW.id, 'Healthcare', 'expense', '#ec4899', TRUE),
+    (NEW.id, 'Entertainment', 'expense', '#8b5cf6', TRUE),
+    (NEW.id, 'Shopping', 'expense', '#6366f1', TRUE),
+    (NEW.id, 'Other Expense', 'expense', '#64748b', TRUE),
+    (NEW.id, 'Account Transfer', 'transfer', '#3b82f6', TRUE),
+    (NEW.id, 'Stock Purchase', 'investment', '#d4a853', TRUE),
+    (NEW.id, 'Bond Purchase', 'investment', '#c49a47', TRUE),
+    (NEW.id, 'Other Investment', 'investment', '#a67c2e', TRUE);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE TRIGGER on_profile_created_seed_categories
+  AFTER INSERT ON profiles
+  FOR EACH ROW EXECUTE FUNCTION seed_default_transaction_categories();
 CREATE TRIGGER real_estate_updated_at BEFORE UPDATE ON real_estate_properties
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER investment_holdings_updated_at BEFORE UPDATE ON investment_holdings

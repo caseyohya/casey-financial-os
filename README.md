@@ -43,7 +43,7 @@ Edit `.env.local` with your Supabase project URL and anon key.
 
 4. Set up the database:
 
-Run `database/schema.sql` in the Supabase SQL Editor.
+Run `database/schema.sql` in the Supabase SQL Editor. If upgrading from the foundation schema, also run `database/banking_schema.sql`.
 
 5. Start the development server:
 

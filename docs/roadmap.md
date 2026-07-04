@@ -12,8 +12,16 @@
 
 ## Phase 2 — Manual Data Entry
 
-- [ ] CRUD forms for bank accounts
-- [ ] CRUD forms for transactions (read-only display)
+- [x] CRUD forms for bank accounts (App 2 — Banking Platform)
+- [x] CRUD forms for transactions (read-only display)
+- [x] Manual balance history tracking
+- [x] CSV import with column mapping
+- [x] Transaction categorization (income, expense, transfer, investment)
+- [x] Monthly cash flow and spending by category
+- [x] Recurring expense tracking
+- [x] U.S. (USD) and Japan (JPY) support with manual exchange rates
+- [x] Filters by account, month, category, country, currency
+- [x] Banking summary CSV export
 - [ ] CRUD forms for real estate properties
 - [ ] CRUD forms for investment holdings
 - [ ] CRUD forms for tax records
@@ -32,7 +40,7 @@
 
 ## Phase 4 — Read-Only Integrations
 
-- [ ] Plaid bank account linking (read-only balances and transactions)
+- [ ] Plaid bank account linking (read-only balances and transactions) — schema ready (`plaid_item_id`, `plaid_account_id`, `external_id` fields)
 - [ ] Market data API for investment price updates (read-only)
 - [ ] Property valuation estimates (read-only)
 - [ ] Tax document import (read-only parsing)

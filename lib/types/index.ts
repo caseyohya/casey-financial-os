@@ -31,12 +31,134 @@ export interface BankAccount {
   account_type: "checking" | "savings" | "credit" | "loan" | "other";
   balance: number;
   currency: string;
+  country: "US" | "JP";
+  exchange_rate_to_usd: number | null;
   is_active: boolean;
+  data_source: "manual" | "csv" | "plaid";
+  plaid_item_id: string | null;
+  plaid_account_id: string | null;
+  last_synced_at: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
 }
 
+export type TransactionType = "income" | "expense" | "transfer" | "investment";
+export type DataSource = "manual" | "csv" | "plaid";
+export type Country = "US" | "JP";
+export type Currency = "USD" | "JPY";
+
+export interface TransactionCategory {
+  id: string;
+  user_id: string;
+  name: string;
+  transaction_type: TransactionType;
+  color: string;
+  is_system: boolean;
+  created_at: string;
+}
+
+export interface BankTransaction {
+  id: string;
+  user_id: string;
+  account_id: string;
+  description: string;
+  amount: number;
+  currency: string;
+  exchange_rate_to_usd: number | null;
+  transaction_type: TransactionType;
+  category_id: string | null;
+  category_name: string;
+  transaction_date: string;
+  is_recurring: boolean;
+  recurring_transaction_id: string | null;
+  import_file_id: string | null;
+  external_id: string | null;
+  data_source: DataSource;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface BankBalance {
+  id: string;
+  user_id: string;
+  account_id: string;
+  balance: number;
+  balance_date: string;
+  currency: string;
+  exchange_rate_to_usd: number | null;
+  notes: string | null;
+  data_source: DataSource;
+  created_at: string;
+}
+
+export interface RecurringTransaction {
+  id: string;
+  user_id: string;
+  account_id: string;
+  description: string;
+  amount: number;
+  currency: string;
+  exchange_rate_to_usd: number | null;
+  transaction_type: TransactionType;
+  category_id: string | null;
+  frequency: "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly";
+  next_occurrence: string | null;
+  last_occurrence: string | null;
+  is_active: boolean;
+  data_source: DataSource;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CashFlowMonthly {
+  id: string;
+  user_id: string;
+  year: number;
+  month: number;
+  currency: string;
+  total_income: number;
+  total_expenses: number;
+  total_transfers: number;
+  total_investments: number;
+  net_cash_flow: number;
+  exchange_rate_to_usd: number | null;
+  computed_at: string;
+}
+
+export interface ImportFile {
+  id: string;
+  user_id: string;
+  account_id: string | null;
+  filename: string;
+  file_size: number | null;
+  column_mapping: ColumnMapping | null;
+  status: "pending" | "mapped" | "imported" | "failed";
+  row_count: number;
+  imported_count: number;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ColumnMapping {
+  date: string;
+  description: string;
+  amount: string;
+  category?: string;
+  type?: string;
+}
+
+export interface BankingFilters {
+  accountId: string;
+  month: string;
+  categoryId: string;
+  country: string;
+  currency: string;
+}
+
+/** @deprecated Use BankTransaction */
 export interface Transaction {
   id: string;
   user_id: string;
