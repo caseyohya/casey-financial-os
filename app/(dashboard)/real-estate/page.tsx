@@ -1,99 +1,148 @@
+import Link from "next/link";
+import { Plus } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { DashboardCard } from "@/components/dashboard/DashboardCard";
 import { EmptyState } from "@/components/dashboard/EmptyState";
-import { formatCurrency } from "@/lib/utils";
-import { Home } from "lucide-react";
+import { PropertyCard } from "@/components/real-estate/PropertyCard";
+import { ExportButtons } from "@/components/real-estate/ExportButtons";
+import { BarChartCard } from "@/components/charts/FinancialCharts";
+import { getPortfolioData } from "@/lib/data/real-estate";
+import { calculatePortfolioMetrics, calculatePropertyMetrics } from "@/lib/calculations/real-estate";
+import { formatCurrency, formatPercent } from "@/lib/utils";
+import { Button } from "@/components/forms/FormFields";
 
-const placeholderProperties = [
-  {
-    name: "Primary Residence",
-    address: "123 Executive Blvd, San Francisco, CA",
-    type: "primary" as const,
-    value: 1850000,
-    mortgage: 620000,
-    equity: 1230000,
-  },
-  {
-    name: "Rental Property — Oak St",
-    address: "456 Oak Street, Austin, TX",
-    type: "rental" as const,
-    value: 485000,
-    mortgage: 210000,
-    equity: 275000,
-  },
-];
+export default async function RealEstatePortfolioPage() {
+  const { properties, mortgagesByProperty, incomeByProperty, expensesByProperty } =
+    await getPortfolioData();
 
-export default function RealEstatePage() {
-  const totalValue = placeholderProperties.reduce((s, p) => s + p.value, 0);
-  const totalEquity = placeholderProperties.reduce((s, p) => s + p.equity, 0);
-  const totalMortgage = placeholderProperties.reduce((s, p) => s + p.mortgage, 0);
+  const portfolio = calculatePortfolioMetrics(
+    properties,
+    mortgagesByProperty,
+    incomeByProperty,
+    expensesByProperty
+  );
+
+  const propertyMetrics = properties.map((p) => ({
+    property: p,
+    metrics: calculatePropertyMetrics(
+      p,
+      mortgagesByProperty[p.id] ?? [],
+      incomeByProperty[p.id] ?? [],
+      expensesByProperty[p.id] ?? []
+    ),
+  }));
+
+  const chartData = properties.map((p) => ({
+    name: p.name.length > 12 ? `${p.name.slice(0, 12)}…` : p.name,
+    value: p.current_value,
+  }));
 
   return (
     <div>
       <PageHeader
         title="Real Estate Platform"
-        description="Property portfolio, equity tracking, and rental income"
-      />
+        description="U.S. and Japan rental property tracking, income, expenses, and CPA-ready reporting"
+      >
+        <Link href="/real-estate/new">
+          <Button>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Property
+          </Button>
+        </Link>
+      </PageHeader>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="Portfolio Value" value={formatCurrency(totalValue)} />
-        <MetricCard
-          label="Total Equity"
-          value={formatCurrency(totalEquity)}
-          change="+5.2% YTD"
-          changeType="positive"
+      {properties.length === 0 ? (
+        <EmptyState
+          title="No properties yet"
+          description="Add your first U.S. or Japan rental property to start tracking income, expenses, equity, and generate CPA-ready reports."
+          action={
+            <Link href="/real-estate/new">
+              <Button>Add Property</Button>
+            </Link>
+          }
         />
-        <MetricCard label="Mortgage Balance" value={formatCurrency(totalMortgage)} />
-        <MetricCard label="Properties" value={String(placeholderProperties.length)} />
-      </div>
-
-      <div className="mt-8">
-        <DashboardCard title="Properties" description="Your real estate holdings">
-          <div className="space-y-4">
-            {placeholderProperties.map((property) => (
-              <div
-                key={property.name}
-                className="rounded-lg border border-navy-700 bg-navy-800 p-4"
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="font-medium text-white">{property.name}</p>
-                    <p className="mt-0.5 text-xs text-slate-400">{property.address}</p>
-                  </div>
-                  <span className="rounded-full bg-navy-700 px-2.5 py-0.5 text-xs capitalize text-slate-300">
-                    {property.type}
-                  </span>
-                </div>
-                <div className="mt-4 grid grid-cols-3 gap-4 text-sm">
-                  <div>
-                    <p className="text-xs text-slate-500">Value</p>
-                    <p className="font-medium text-white">{formatCurrency(property.value)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500">Mortgage</p>
-                    <p className="font-medium text-white">{formatCurrency(property.mortgage)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500">Equity</p>
-                    <p className="font-medium text-emerald-400">{formatCurrency(property.equity)}</p>
-                  </div>
-                </div>
+      ) : (
+        <>
+          {/* USD Portfolio */}
+          {portfolio.byCurrency.USD.propertyCount > 0 && (
+            <div className="mb-8">
+              <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">
+                USD Portfolio
+              </h2>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <MetricCard
+                  label="Portfolio Value"
+                  value={formatCurrency(portfolio.byCurrency.USD.totalValue, "USD")}
+                />
+                <MetricCard
+                  label="Total Equity"
+                  value={formatCurrency(portfolio.byCurrency.USD.totalEquity, "USD")}
+                />
+                <MetricCard
+                  label="Monthly Cash Flow"
+                  value={formatCurrency(portfolio.byCurrency.USD.totalMonthlyCashFlow, "USD")}
+                  changeType={portfolio.byCurrency.USD.totalMonthlyCashFlow >= 0 ? "positive" : "negative"}
+                />
+                <MetricCard
+                  label="Avg Cap Rate"
+                  value={formatPercent(portfolio.byCurrency.USD.avgCapRate)}
+                />
               </div>
-            ))}
-          </div>
-        </DashboardCard>
-      </div>
+            </div>
+          )}
 
-      <div className="mt-8">
-        <DashboardCard title="Add Property" description="Manual data entry">
-          <EmptyState
-            title="Track more properties"
-            description="Add rental properties, commercial holdings, or land to build a complete real estate portfolio view."
-            icon={<Home className="h-8 w-8" />}
-          />
-        </DashboardCard>
-      </div>
+          {/* JPY Portfolio */}
+          {portfolio.byCurrency.JPY.propertyCount > 0 && (
+            <div className="mb-8">
+              <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">
+                JPY Portfolio
+              </h2>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <MetricCard
+                  label="Portfolio Value"
+                  value={formatCurrency(portfolio.byCurrency.JPY.totalValue, "JPY")}
+                />
+                <MetricCard
+                  label="Total Equity"
+                  value={formatCurrency(portfolio.byCurrency.JPY.totalEquity, "JPY")}
+                />
+                <MetricCard
+                  label="Monthly Cash Flow"
+                  value={formatCurrency(portfolio.byCurrency.JPY.totalMonthlyCashFlow, "JPY")}
+                  changeType={portfolio.byCurrency.JPY.totalMonthlyCashFlow >= 0 ? "positive" : "negative"}
+                />
+                <MetricCard
+                  label="Avg Cap Rate"
+                  value={formatPercent(portfolio.byCurrency.JPY.avgCapRate)}
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="mt-8 grid gap-6 lg:grid-cols-2">
+            <DashboardCard title="Properties" description={`${portfolio.totalProperties} active properties`}>
+              <div className="space-y-4">
+                {propertyMetrics.map(({ property, metrics }) => (
+                  <PropertyCard key={property.id} property={property} metrics={metrics} />
+                ))}
+              </div>
+            </DashboardCard>
+
+            {chartData.length > 0 && (
+              <DashboardCard title="Value by Property" description="Current market values">
+                <BarChartCard data={chartData} />
+              </DashboardCard>
+            )}
+          </div>
+
+          <div className="mt-8">
+            <DashboardCard title="CPA Exports" description="Schedule E-style and comprehensive CSV reports">
+              <ExportButtons />
+            </DashboardCard>
+          </div>
+        </>
+      )}
     </div>
   );
 }

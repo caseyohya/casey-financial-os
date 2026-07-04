@@ -43,9 +43,11 @@ Edit `.env.local` with your Supabase project URL and anon key.
 
 4. Set up the database:
 
-Run `database/schema.sql` in the Supabase SQL Editor.
+Run `database/schema.sql` in the Supabase SQL Editor, then run `database/real-estate-schema.sql` for the Real Estate Platform tables.
 
-5. Start the development server:
+5. Create a Supabase Storage bucket named `property-documents` (private) for document uploads.
+
+6. Start the development server:
 
 ```bash
 npm run dev

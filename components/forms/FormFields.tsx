@@ -61,6 +61,34 @@ export function SelectField({ label, options, error, className, id, ...props }: 
   );
 }
 
+interface TextareaFieldProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
+  label: string;
+  error?: string;
+}
+
+export function TextareaField({ label, error, className, id, ...props }: TextareaFieldProps) {
+  const textareaId = id ?? label.toLowerCase().replace(/\s+/g, "-");
+
+  return (
+    <div className="space-y-1.5">
+      <label htmlFor={textareaId} className="block text-sm font-medium text-slate-300">
+        {label}
+      </label>
+      <textarea
+        id={textareaId}
+        className={cn(
+          "w-full rounded-lg border border-navy-600 bg-navy-800 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-gold-500 focus:outline-none focus:ring-1 focus:ring-gold-500",
+          error && "border-red-500",
+          className
+        )}
+        rows={3}
+        {...props}
+      />
+      {error && <p className="text-xs text-red-400">{error}</p>}
+    </div>
+  );
+}
+
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "secondary" | "ghost";
   isLoading?: boolean;

@@ -7,14 +7,15 @@ export function cn(...inputs: ClassValue[]) {
 
 export function formatCurrency(
   amount: number,
-  currency = "USD",
+  currency: string = "USD",
   locale = "en-US"
 ): string {
-  return new Intl.NumberFormat(locale, {
+  const currencyLocale = currency === "JPY" ? "ja-JP" : locale;
+  return new Intl.NumberFormat(currencyLocale, {
     style: "currency",
     currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: currency === "JPY" ? 0 : 0,
+    maximumFractionDigits: currency === "JPY" ? 0 : 2,
   }).format(amount);
 }
 
