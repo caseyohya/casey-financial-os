@@ -40,7 +40,7 @@ export const NAV_ITEMS: NavItem[] = [
     id: "tax",
     label: "Tax Intelligence",
     href: "/tax",
-    description: "Tax records, rates, and planning insights",
+    description: "CPA-ready tax preparation organizer",
     icon: "FileText",
   },
 ];
