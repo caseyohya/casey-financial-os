@@ -6,6 +6,7 @@ import { PropertyMetricsGrid } from "@/components/real-estate/PropertyMetricsGri
 import { IncomeExpenseForms } from "@/components/real-estate/IncomeExpenseForms";
 import { TenantForm } from "@/components/real-estate/TenantForm";
 import { DocumentUploadForm } from "@/components/real-estate/DocumentUploadForm";
+import { MonthlySummaryPanel } from "@/components/real-estate/MonthlySummaryPanel";
 import { ExportButtons } from "@/components/real-estate/ExportButtons";
 import { getPropertyById, formatPropertyAddress } from "@/lib/data/real-estate";
 import { calculatePropertyMetrics, detectVacancyPeriods } from "@/lib/calculations/real-estate";
@@ -158,6 +159,14 @@ export default async function PropertyDetailPage({ params }: PropertyDetailPageP
       </div>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
+        <DashboardCard title="Monthly Summary" description="Aggregated NOI, mortgage splits, and cash flow by month">
+          <MonthlySummaryPanel
+            propertyId={id}
+            currency={property.currency}
+            summaries={property.monthly_summaries ?? []}
+          />
+        </DashboardCard>
+
         <DashboardCard title="Documents" description="Leases, mortgage statements, tax bills, insurance, repairs">
           <DocumentUploadForm propertyId={id} />
           {(property.documents ?? []).length > 0 && (
@@ -171,7 +180,9 @@ export default async function PropertyDetailPage({ params }: PropertyDetailPageP
             </div>
           )}
         </DashboardCard>
+      </div>
 
+      <div className="mt-8">
         <DashboardCard title="CPA Exports" description="Schedule E and comprehensive CSV for your accountant">
           <ExportButtons />
         </DashboardCard>
