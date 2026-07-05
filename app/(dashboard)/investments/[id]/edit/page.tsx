@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DashboardCard } from "@/components/dashboard/DashboardCard";
 import { InvestmentForm } from "@/components/investments/InvestmentForm";
+import { DeleteInvestmentButton } from "@/components/investments/DeleteInvestmentButton";
 import { getInvestmentById, getInvestmentEntities } from "@/lib/data/investments";
 import { Button } from "@/components/forms/FormFields";
 
@@ -22,9 +23,12 @@ export default async function EditInvestmentPage({ params }: EditInvestmentPageP
   return (
     <div>
       <PageHeader title={`Edit ${investment.name}`} description="Update investment details">
-        <Link href={`/investments/${id}`}>
-          <Button variant="secondary">Cancel</Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href={`/investments/${id}`}>
+            <Button variant="secondary">Cancel</Button>
+          </Link>
+          <DeleteInvestmentButton investmentId={id} investmentName={investment.name} />
+        </div>
       </PageHeader>
 
       <DashboardCard title="Investment Details">

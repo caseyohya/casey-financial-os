@@ -99,6 +99,21 @@ export default async function InvestmentDetailPage({ params }: InvestmentDetailP
         </DashboardCard>
       </div>
 
+      {(investment.valuations ?? []).length > 0 && (
+        <div className="mt-8">
+          <DashboardCard title="Valuation History">
+            <div className="space-y-2">
+              {(investment.valuations ?? []).map((v) => (
+                <div key={v.id} className="flex justify-between rounded-lg border border-navy-700 bg-navy-800 px-4 py-3 text-sm">
+                  <span className="text-slate-300">{formatDate(v.valuation_date)} — {v.source.replace(/_/g, " ")}</span>
+                  <span className="text-white">{formatCurrency(v.value, v.currency)}</span>
+                </div>
+              ))}
+            </div>
+          </DashboardCard>
+        </div>
+      )}
+
       {(investment.capital_calls ?? []).length > 0 && (
         <div className="mt-8">
           <DashboardCard title="Capital Calls">
