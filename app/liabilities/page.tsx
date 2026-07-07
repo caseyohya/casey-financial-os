@@ -5,19 +5,20 @@ import Header from '@/components/Header'
 import PageHeader from '@/components/PageHeader'
 import DataTable from '@/components/DataTable'
 import FormModal from '@/components/FormModal'
-import { supabase, Account } from '@/lib/supabase'
-import { ACCOUNT_TYPES, DEMO_PROFILE_ID } from '@/lib/constants'
+import { supabase, Liability } from '@/lib/supabase'
+import { DEMO_PROFILE_ID, LIABILITY_TYPES } from '@/lib/constants'
 import { formatCurrency } from '@/lib/finance'
 import { ensureDemoProfile } from '@/lib/profile'
 
 const defaultForm = {
   name: '',
-  account_type: 'Checking',
+  liability_type: 'Credit Card',
   balance: '',
+  interest_rate: '',
 }
 
-export default function AccountsPage() {
-  const [accounts, setAccounts] = useState<Account[]>([])
+export default function LiabilitiesPage() {
+  const [liabilities, setLiabilities] = useState<Liability[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -31,23 +32,23 @@ export default function AccountsPage() {
     setIsLoading(true)
     try {
       await ensureDemoProfile()
-      await loadAccounts()
+      await loadLiabilities()
     } catch (error) {
-      console.error('Error loading accounts:', error)
+      console.error('Error loading liabilities:', error)
     } finally {
       setIsLoading(false)
     }
   }
 
-  const loadAccounts = async () => {
+  const loadLiabilities = async () => {
     const { data, error } = await supabase
-      .from('accounts')
+      .from('liabilities')
       .select('*')
       .eq('profile_id', DEMO_PROFILE_ID)
       .order('created_at', { ascending: false })
 
     if (error) throw error
-    setAccounts(data || [])
+    setLiabilities(data || [])
   }
 
   const openAddForm = () => {
@@ -61,56 +62,54 @@ export default function AccountsPage() {
     try {
       const payload = {
         name: formData.name,
-        account_type: formData.account_type,
+        liability_type: formData.liability_type,
         balance: parseFloat(formData.balance),
+        interest_rate: formData.interest_rate ? parseFloat(formData.interest_rate) : null,
       }
 
       if (editingId) {
-        const { error } = await supabase.from('accounts').update(payload).eq('id', editingId)
+        const { error } = await supabase.from('liabilities').update(payload).eq('id', editingId)
         if (error) throw error
       } else {
-        const { error } = await supabase.from('accounts').insert([{ ...payload, profile_id: DEMO_PROFILE_ID }])
+        const { error } = await supabase.from('liabilities').insert([{ ...payload, profile_id: DEMO_PROFILE_ID }])
         if (error) throw error
       }
 
       setIsFormOpen(false)
       setEditingId(null)
       setFormData(defaultForm)
-      await loadAccounts()
+      await loadLiabilities()
     } catch (error) {
-      console.error('Error saving account:', error)
-      alert('Failed to save account')
+      console.error('Error saving liability:', error)
+      alert('Failed to save liability')
     }
   }
 
-  const handleEdit = (account: Account) => {
+  const handleEdit = (liability: Liability) => {
     setFormData({
-      name: account.name,
-      account_type: account.account_type,
-      balance: account.balance.toString(),
+      name: liability.name,
+      liability_type: liability.liability_type,
+      balance: liability.balance.toString(),
+      interest_rate: liability.interest_rate?.toString() || '',
     })
-    setEditingId(account.id)
+    setEditingId(liability.id)
     setIsFormOpen(true)
   }
 
-  const handleDelete = async (account: Account) => {
-    if (!confirm(`Delete "${account.name}"?`)) return
+  const handleDelete = async (liability: Liability) => {
+    if (!confirm(`Delete "${liability.name}"?`)) return
 
     try {
-      const { error } = await supabase.from('accounts').delete().eq('id', account.id)
+      const { error } = await supabase.from('liabilities').delete().eq('id', liability.id)
       if (error) throw error
-      await loadAccounts()
+      await loadLiabilities()
     } catch (error) {
-      console.error('Error deleting account:', error)
-      alert('Failed to delete account')
+      console.error('Error deleting liability:', error)
+      alert('Failed to delete liability')
     }
   }
 
-  const totalBalance = accounts.reduce((sum, acc) => sum + Number(acc.balance), 0)
-  const accountsByType = accounts.reduce((acc, curr) => {
-    acc[curr.account_type] = (acc[curr.account_type] || 0) + Number(curr.balance)
-    return acc
-  }, {} as Record<string, number>)
+  const totalBalance = liabilities.reduce((sum, liability) => sum + Number(liability.balance), 0)
 
   return (
     <div className="min-h-screen bg-executive-darker">
@@ -118,50 +117,45 @@ export default function AccountsPage() {
 
       <main className="p-8 max-w-6xl mx-auto space-y-8">
         <PageHeader
-          title="Accounts"
-          description="Manage your bank and investment accounts"
-          addLabel="Add Account"
+          title="Liabilities"
+          description="Track mortgages, loans, credit cards, and other debts"
+          addLabel="Add Liability"
           onAdd={openAddForm}
         />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="executive-card p-6">
-            <p className="metric-label">Total Balance</p>
-            <p className="metric-value text-executive-accent">${formatCurrency(totalBalance)}</p>
+            <p className="metric-label">Total Liability Balance</p>
+            <p className="metric-value text-executive-danger">${formatCurrency(totalBalance)}</p>
           </div>
           <div className="executive-card p-6">
-            <p className="metric-label">Total Accounts</p>
-            <p className="metric-value text-executive-accent">{accounts.length}</p>
+            <p className="metric-label">Total Liabilities</p>
+            <p className="metric-value text-executive-accent">{liabilities.length}</p>
           </div>
         </div>
-
-        {Object.keys(accountsByType).length > 0 && (
-          <div className="executive-card p-6">
-            <h2 className="text-xl font-bold mb-4 text-slate-100">Balance by Account Type</h2>
-            <div className="space-y-3">
-              {Object.entries(accountsByType).map(([type, balance]) => (
-                <div key={type} className="flex justify-between items-center p-3 bg-slate-800 rounded">
-                  <span className="text-slate-300">{type}</span>
-                  <span className="font-semibold text-executive-success">${formatCurrency(balance)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         <DataTable
           columns={[
             {
               key: 'name',
-              header: 'Account Name',
-              render: (account) => <span className="text-slate-100">{account.name}</span>,
+              header: 'Name',
+              render: (liability) => <span className="text-slate-100">{liability.name}</span>,
             },
             {
               key: 'type',
               header: 'Type',
-              render: (account) => (
+              render: (liability) => (
                 <span className="inline-block px-3 py-1 bg-slate-700 rounded-full text-sm text-slate-300">
-                  {account.account_type}
+                  {liability.liability_type}
+                </span>
+              ),
+            },
+            {
+              key: 'rate',
+              header: 'Interest Rate',
+              render: (liability) => (
+                <span className="text-slate-300">
+                  {liability.interest_rate != null ? `${liability.interest_rate}%` : '—'}
                 </span>
               ),
             },
@@ -169,24 +163,24 @@ export default function AccountsPage() {
               key: 'balance',
               header: 'Balance',
               align: 'right',
-              render: (account) => (
-                <span className="font-semibold text-executive-success">
-                  ${formatCurrency(Number(account.balance))}
+              render: (liability) => (
+                <span className="font-semibold text-executive-danger">
+                  ${formatCurrency(Number(liability.balance))}
                 </span>
               ),
             },
           ]}
-          data={accounts}
+          data={liabilities}
           isLoading={isLoading}
-          emptyMessage='No accounts yet. Click "Add Account" to get started.'
-          getRowKey={(account) => account.id}
+          emptyMessage='No liabilities yet. Click "Add Liability" to get started.'
+          getRowKey={(liability) => liability.id}
           onEdit={handleEdit}
           onDelete={handleDelete}
         />
       </main>
 
       <FormModal
-        title={editingId ? 'Edit Account' : 'Add New Account'}
+        title={editingId ? 'Edit Liability' : 'Add New Liability'}
         isOpen={isFormOpen}
         onClose={() => {
           setIsFormOpen(false)
@@ -196,11 +190,11 @@ export default function AccountsPage() {
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-2">Account Name</label>
+            <label className="block text-sm font-medium mb-2">Liability Name</label>
             <input
               type="text"
               className="executive-input w-full"
-              placeholder="e.g., Chase Checking"
+              placeholder="e.g., Primary Mortgage"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               required
@@ -208,13 +202,13 @@ export default function AccountsPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2">Account Type</label>
+            <label className="block text-sm font-medium mb-2">Liability Type</label>
             <select
               className="executive-input w-full"
-              value={formData.account_type}
-              onChange={(e) => setFormData({ ...formData, account_type: e.target.value })}
+              value={formData.liability_type}
+              onChange={(e) => setFormData({ ...formData, liability_type: e.target.value })}
             >
-              {ACCOUNT_TYPES.map((type) => (
+              {LIABILITY_TYPES.map((type) => (
                 <option key={type} value={type}>
                   {type}
                 </option>
@@ -223,7 +217,7 @@ export default function AccountsPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2">Current Balance ($)</label>
+            <label className="block text-sm font-medium mb-2">Balance ($)</label>
             <input
               type="number"
               className="executive-input w-full"
@@ -235,9 +229,21 @@ export default function AccountsPage() {
             />
           </div>
 
+          <div>
+            <label className="block text-sm font-medium mb-2">Interest Rate (%) — Optional</label>
+            <input
+              type="number"
+              className="executive-input w-full"
+              placeholder="0.00"
+              step="0.01"
+              value={formData.interest_rate}
+              onChange={(e) => setFormData({ ...formData, interest_rate: e.target.value })}
+            />
+          </div>
+
           <div className="flex gap-2 pt-4">
             <button type="submit" className="executive-button flex-1">
-              {editingId ? 'Update Account' : 'Add Account'}
+              {editingId ? 'Update Liability' : 'Add Liability'}
             </button>
             <button
               type="button"

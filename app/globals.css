@@ -34,3 +34,19 @@ body {
 .metric-label {
   @apply text-sm text-slate-400 uppercase tracking-wide;
 }
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .report-page {
+    background: white !important;
+    color: black !important;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+  }
+}

@@ -1,212 +1,178 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { FileText } from 'lucide-react'
 import Header from '@/components/Header'
 import MetricsGrid from '@/components/MetricsGrid'
-import AddAssetForm from '@/components/AddAssetForm'
-import AddLiabilityForm from '@/components/AddLiabilityForm'
-import AddIncomeForm from '@/components/AddIncomeForm'
-import AddExpenseForm from '@/components/AddExpenseForm'
-import { supabase, Asset, Liability, IncomeSource, Expense } from '@/lib/supabase'
+import FinancialHealthCard from '@/components/FinancialHealthCard'
+import DashboardCharts from '@/components/DashboardCharts'
+import ExportActions from '@/components/ExportActions'
+import { loadFinancialDataWithSnapshots } from '@/lib/data'
+import {
+  assessFinancialHealth,
+  buildAssetAllocation,
+  buildIncomeVsExpense,
+  buildLiabilitiesByCategory,
+  calculateFinancialMetrics,
+  FinancialMetrics,
+} from '@/lib/finance'
+import { ensureDemoProfile } from '@/lib/profile'
+import { upsertMonthlySnapshot } from '@/lib/snapshots'
+import { NAV_ITEMS } from '@/lib/constants'
+import { Account, Asset, Expense, IncomeSource, Liability, MonthlySnapshot } from '@/lib/supabase'
 
-const DEMO_PROFILE_ID = 'demo-profile-001'
+const DATA_PAGES = NAV_ITEMS.filter((item) => !['/', '/report'].includes(item.href))
+
+const EMPTY_METRICS: FinancialMetrics = {
+  totalAssets: 0,
+  totalLiabilities: 0,
+  netWorth: 0,
+  monthlyIncome: 0,
+  monthlyExpenses: 0,
+  monthlyCashFlow: 0,
+  debtToAssetRatio: null,
+  liquidityRatio: null,
+  liquidAssets: 0,
+}
 
 export default function Dashboard() {
+  const pathname = usePathname()
+  const [isLoading, setIsLoading] = useState(true)
+  const [metrics, setMetrics] = useState<FinancialMetrics>(EMPTY_METRICS)
+  const [healthStatus, setHealthStatus] = useState<'Strong' | 'Stable' | 'At Risk'>('Stable')
+  const [snapshots, setSnapshots] = useState<MonthlySnapshot[]>([])
+  const [accounts, setAccounts] = useState<Account[]>([])
   const [assets, setAssets] = useState<Asset[]>([])
   const [liabilities, setLiabilities] = useState<Liability[]>([])
-  const [income, setIncome] = useState<IncomeSource[]>([])
+  const [incomeSources, setIncomeSources] = useState<IncomeSource[]>([])
   const [expenses, setExpenses] = useState<Expense[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [isInitialized, setIsInitialized] = useState(false)
 
   useEffect(() => {
-    checkAndInitializeData()
-  }, [])
+    loadDashboardData()
+  }, [pathname])
 
-  const checkAndInitializeData = async () => {
+  const loadDashboardData = async () => {
     setIsLoading(true)
     try {
-      // Check if profile exists
-      const { data: existingProfile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', DEMO_PROFILE_ID)
-        .single()
+      await ensureDemoProfile()
+      const data = await loadFinancialDataWithSnapshots()
 
-      if (!existingProfile) {
-        // Create demo profile
-        const { error } = await supabase.from('profiles').insert([
-          {
-            id: DEMO_PROFILE_ID,
-            email: 'casey@financialhub.local',
-            full_name: 'Casey',
-          },
-        ])
-        if (error) throw error
+      const calculated = calculateFinancialMetrics(
+        data.assets,
+        data.liabilities,
+        data.incomeSources,
+        data.expenses,
+        data.accounts
+      )
+
+      try {
+        await upsertMonthlySnapshot(calculated)
+        const refreshed = await loadFinancialDataWithSnapshots()
+        setSnapshots(refreshed.snapshots)
+      } catch (snapshotError) {
+        console.error('Error saving monthly snapshot:', snapshotError)
+        setSnapshots(data.snapshots)
       }
 
-      setIsInitialized(true)
-      await loadData()
+      setMetrics(calculated)
+      setHealthStatus(assessFinancialHealth(calculated))
+      setAccounts(data.accounts)
+      setAssets(data.assets)
+      setLiabilities(data.liabilities)
+      setIncomeSources(data.incomeSources)
+      setExpenses(data.expenses)
     } catch (error) {
-      console.error('Error initializing:', error)
+      console.error('Error loading dashboard:', error)
     } finally {
       setIsLoading(false)
     }
   }
 
-  const loadData = async () => {
-    try {
-      const [assetsRes, liabilitiesRes, incomeRes, expensesRes] = await Promise.all([
-        supabase.from('assets').select('*').eq('profile_id', DEMO_PROFILE_ID),
-        supabase.from('liabilities').select('*').eq('profile_id', DEMO_PROFILE_ID),
-        supabase.from('income_sources').select('*').eq('profile_id', DEMO_PROFILE_ID),
-        supabase.from('expenses').select('*').eq('profile_id', DEMO_PROFILE_ID),
-      ])
-
-      if (assetsRes.data) setAssets(assetsRes.data)
-      if (liabilitiesRes.data) setLiabilities(liabilitiesRes.data)
-      if (incomeRes.data) setIncome(incomeRes.data)
-      if (expensesRes.data) setExpenses(expensesRes.data)
-    } catch (error) {
-      console.error('Error loading data:', error)
-    }
-  }
-
-  // Calculate metrics
-  const totalAssets = assets.reduce((sum, asset) => sum + asset.value, 0)
-  const totalLiabilities = liabilities.reduce((sum, liability) => sum + liability.balance, 0)
-  const netWorth = totalAssets - totalLiabilities
-
-  // Calculate monthly income (normalize frequencies)
-  const monthlyIncome = income.reduce((sum, source) => {
-    const monthlyAmount = source.frequency === 'Monthly'
-      ? source.amount
-      : source.frequency === 'Bi-weekly'
-      ? (source.amount * 26) / 12
-      : source.frequency === 'Weekly'
-      ? (source.amount * 52) / 12
-      : source.frequency === 'Yearly'
-      ? source.amount / 12
-      : 0
-    return sum + monthlyAmount
-  }, 0)
-
-  // Calculate monthly expenses (normalize frequencies)
-  const monthlyExpenses = expenses.reduce((sum, expense) => {
-    const monthlyAmount = expense.frequency === 'Monthly'
-      ? expense.amount
-      : expense.frequency === 'Bi-weekly'
-      ? (expense.amount * 26) / 12
-      : expense.frequency === 'Weekly'
-      ? (expense.amount * 52) / 12
-      : expense.frequency === 'Yearly'
-      ? expense.amount / 12
-      : 0
-    return sum + monthlyAmount
-  }, 0)
+  const assetAllocation = buildAssetAllocation(assets, accounts)
+  const incomeVsExpense = buildIncomeVsExpense(metrics)
+  const liabilitiesByCategory = buildLiabilitiesByCategory(liabilities, accounts)
 
   return (
     <div className="min-h-screen bg-executive-darker">
       <Header />
 
       <main className="p-8 max-w-7xl mx-auto space-y-8">
-        {/* Metrics Grid */}
         <section>
-          <h2 className="text-2xl font-bold mb-6 text-slate-100">Financial Overview</h2>
-          <MetricsGrid
-            netWorth={netWorth}
-            totalAssets={totalAssets}
-            totalLiabilities={totalLiabilities}
-            monthlyIncome={monthlyIncome}
-            monthlyExpenses={monthlyExpenses}
-            isLoading={!isInitialized}
-          />
-        </section>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+            <div>
+              <h2 className="text-2xl font-bold text-slate-100">Financial Overview</h2>
+              <p className="text-slate-400 mt-1">
+                Master financial statement — metrics update from your manual entries.
+              </p>
+            </div>
+            <Link href="/report" className="executive-button-secondary flex items-center gap-2 w-fit">
+              <FileText className="w-4 h-4" />
+              View Summary Report
+            </Link>
+          </div>
 
-        {/* Data Entry Section */}
-        <section className="executive-card p-8">
-          <h2 className="text-2xl font-bold mb-6 text-slate-100">Add Financial Data</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <AddAssetForm profileId={DEMO_PROFILE_ID} onSuccess={loadData} />
-            <AddLiabilityForm profileId={DEMO_PROFILE_ID} onSuccess={loadData} />
-            <AddIncomeForm profileId={DEMO_PROFILE_ID} onSuccess={loadData} />
-            <AddExpenseForm profileId={DEMO_PROFILE_ID} onSuccess={loadData} />
+          <div className="space-y-4">
+            <MetricsGrid
+              netWorth={metrics.netWorth}
+              totalAssets={metrics.totalAssets}
+              totalLiabilities={metrics.totalLiabilities}
+              monthlyIncome={metrics.monthlyIncome}
+              monthlyExpenses={metrics.monthlyExpenses}
+              monthlyCashFlow={metrics.monthlyCashFlow}
+              debtToAssetRatio={metrics.debtToAssetRatio}
+              liquidityRatio={metrics.liquidityRatio}
+              isLoading={isLoading}
+            />
+            <FinancialHealthCard status={healthStatus} isLoading={isLoading} />
           </div>
         </section>
 
-        {/* Assets List */}
-        {assets.length > 0 && (
-          <section className="executive-card p-8">
-            <h3 className="text-xl font-bold mb-4 text-slate-100">Assets</h3>
-            <div className="space-y-2">
-              {assets.map((asset) => (
-                <div key={asset.id} className="flex justify-between p-3 bg-slate-800 rounded">
-                  <div>
-                    <p className="font-medium">{asset.name}</p>
-                    <p className="text-xs text-slate-400">{asset.asset_type}</p>
-                  </div>
-                  <p className="font-semibold text-executive-success">${asset.value.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
+        <section>
+          <h2 className="text-2xl font-bold mb-6 text-slate-100">Analytics</h2>
+          <DashboardCharts
+            snapshots={snapshots}
+            assetAllocation={assetAllocation}
+            incomeVsExpense={incomeVsExpense}
+            liabilitiesByCategory={liabilitiesByCategory}
+            isLoading={isLoading}
+          />
+        </section>
 
-        {/* Liabilities List */}
-        {liabilities.length > 0 && (
-          <section className="executive-card p-8">
-            <h3 className="text-xl font-bold mb-4 text-slate-100">Liabilities</h3>
-            <div className="space-y-2">
-              {liabilities.map((liability) => (
-                <div key={liability.id} className="flex justify-between p-3 bg-slate-800 rounded">
-                  <div>
-                    <p className="font-medium">{liability.name}</p>
-                    <p className="text-xs text-slate-400">{
-                      liability.liability_type
-                    } {liability.interest_rate && `@ ${liability.interest_rate}%`}</p>
-                  </div>
-                  <p className="font-semibold text-executive-danger">${liability.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
+        <section className="executive-card p-8">
+          <h2 className="text-2xl font-bold mb-2 text-slate-100">Export</h2>
+          <p className="text-slate-400 mb-4">
+            Download your financial summary or full data for offline analysis.
+          </p>
+          {!isLoading && (
+            <ExportActions
+              metrics={metrics}
+              data={{ accounts, assets, liabilities, incomeSources, expenses }}
+            />
+          )}
+        </section>
 
-        {/* Income Sources List */}
-        {income.length > 0 && (
-          <section className="executive-card p-8">
-            <h3 className="text-xl font-bold mb-4 text-slate-100">Income Sources</h3>
-            <div className="space-y-2">
-              {income.map((source) => (
-                <div key={source.id} className="flex justify-between p-3 bg-slate-800 rounded">
-                  <div>
-                    <p className="font-medium">{source.name}</p>
-                    <p className="text-xs text-slate-400">{source.frequency}</p>
-                  </div>
-                  <p className="font-semibold text-executive-success">${source.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Expenses List */}
-        {expenses.length > 0 && (
-          <section className="executive-card p-8">
-            <h3 className="text-xl font-bold mb-4 text-slate-100">Expenses</h3>
-            <div className="space-y-2">
-              {expenses.map((expense) => (
-                <div key={expense.id} className="flex justify-between p-3 bg-slate-800 rounded">
-                  <div>
-                    <p className="font-medium">{expense.name}</p>
-                    <p className="text-xs text-slate-400">{expense.category} - {expense.frequency}</p>
-                  </div>
-                  <p className="font-semibold text-executive-warning">${expense.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
+        <section className="executive-card p-8">
+          <h2 className="text-2xl font-bold mb-2 text-slate-100">Manage Financial Data</h2>
+          <p className="text-slate-400 mb-6">
+            Add, edit, or remove entries on each page. Changes are reflected here on your next visit.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {DATA_PAGES.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="executive-card p-6 hover:border-executive-accent transition-colors"
+              >
+                <h3 className="text-lg font-semibold text-slate-100">{item.label}</h3>
+                <p className="text-sm text-slate-400 mt-2">
+                  List, add, edit, and delete {item.label.toLowerCase()} records
+                </p>
+              </Link>
+            ))}
+          </div>
+        </section>
       </main>
     </div>
   )
