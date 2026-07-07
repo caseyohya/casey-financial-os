@@ -8,6 +8,7 @@ import {
   addCapitalCall,
   addTaxItem,
   addPreciousMetal,
+  addValuation,
 } from "@/app/(dashboard)/investments/actions";
 import type {
   InvestmentCurrency,
@@ -59,6 +60,7 @@ export function ActivityForms({ investmentId, currency, category }: ActivityForm
   const [call, setCall] = useState({ call_date: today, amount: 0, due_date: "" });
   const [tax, setTax] = useState({ tax_year: new Date().getFullYear(), item_type: "ordinary_income" as TaxItemType, amount: 0, k1_line: "", description: "" });
   const [metal, setMetal] = useState({ metal_type: "gold" as MetalType, quantity: 0, unit: "oz", unit_cost: 0, spot_value: 0, storage_location: "" });
+  const [valuation, setValuation] = useState({ valuation_date: today, value: 0, source: "manual", notes: "" });
 
   async function submit(action: () => Promise<{ error?: string } | { success?: boolean }>) {
     setError(null);
@@ -100,6 +102,16 @@ export function ActivityForms({ investmentId, currency, category }: ActivityForm
           <InputField label="Due Date" type="date" value={call.due_date} onChange={(e) => setCall((f) => ({ ...f, due_date: e.target.value }))} />
         </div>
         <Button type="submit">Add Capital Call</Button>
+      </form>
+
+      <form onSubmit={(e) => { e.preventDefault(); submit(() => addValuation(investmentId, { ...valuation, currency })); }} className="space-y-3 rounded-lg border border-navy-700 bg-navy-800/50 p-4">
+        <h4 className="text-sm font-semibold text-white">Valuation</h4>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <InputField label="Date" type="date" value={valuation.valuation_date} onChange={(e) => setValuation((f) => ({ ...f, valuation_date: e.target.value }))} />
+          <InputField label="Value" type="number" min="0" value={valuation.value || ""} onChange={(e) => setValuation((f) => ({ ...f, value: parseFloat(e.target.value) || 0 }))} />
+          <SelectField label="Source" options={[{ value: "manual", label: "Manual" }, { value: "fund_report", label: "Fund Report" }, { value: "appraisal", label: "Appraisal" }, { value: "market", label: "Market" }]} value={valuation.source} onChange={(e) => setValuation((f) => ({ ...f, source: e.target.value }))} />
+        </div>
+        <Button type="submit">Add Valuation</Button>
       </form>
 
       <form onSubmit={(e) => { e.preventDefault(); submit(() => addTaxItem(investmentId, tax)); }} className="space-y-3 rounded-lg border border-navy-700 bg-navy-800/50 p-4">

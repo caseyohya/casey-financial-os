@@ -143,6 +143,27 @@ export async function addTaxItem(
   return { success: true };
 }
 
+export async function addValuation(
+  investmentId: string,
+  data: {
+    valuation_date: string;
+    value: number;
+    currency: string;
+    source?: string;
+    notes?: string;
+  }
+) {
+  const { supabase } = await getAuthenticatedUser();
+  const { error } = await supabase.from("investment_valuations").insert({
+    investment_id: investmentId,
+    ...data,
+    source: data.source ?? "manual",
+  });
+  if (error) return { error: error.message };
+  revalidatePath(`/investments/${investmentId}`);
+  return { success: true };
+}
+
 export async function addPreciousMetal(
   investmentId: string,
   data: {
