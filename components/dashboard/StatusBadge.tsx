@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 
 interface StatusBadgeProps {
-  status: "active" | "inactive" | "pending" | "warning";
+  status: "active" | "inactive" | "pending" | "warning" | "neutral";
   label?: string;
 }
 
@@ -10,6 +10,7 @@ const statusStyles = {
   inactive: "bg-slate-500/10 text-slate-400 border-slate-500/20",
   pending: "bg-amber-500/10 text-amber-400 border-amber-500/20",
   warning: "bg-red-500/10 text-red-400 border-red-500/20",
+  neutral: "bg-slate-500/10 text-slate-300 border-slate-500/20",
 };
 
 export function StatusBadge({ status, label }: StatusBadgeProps) {

@@ -32,8 +32,8 @@ export async function fetchRawModuleData(userId: string): Promise<RawModuleData>
     capitalCalls,
     preciousMetals,
   ] = await Promise.all([
-    safeQuery(supabase.from("bank_accounts").select("balance, account_type, currency").eq("user_id", userId)),
-    safeQuery(supabase.from("transactions").select("amount, is_income, transaction_date, category").eq("user_id", userId)),
+    safeQuery(supabase.from("bank_accounts").select("balance, account_type, currency, country").eq("user_id", userId)),
+    safeQuery(supabase.from("bank_transactions").select("amount, transaction_type, transaction_date, category_name").eq("user_id", userId)),
     safeQuery(supabase.from("properties").select("id, current_value, loan_balance, monthly_rent, country, currency, hoa_monthly, taxes_annual, insurance_annual, maintenance_monthly").eq("user_id", userId).eq("is_active", true)),
     safeQuery(supabase.from("property_income").select("amount, income_date, income_type, property_id").in("property_id", [])),
     safeQuery(supabase.from("investments").select("id, current_value, invested_capital, country, currency, category").eq("user_id", userId).eq("status", "active")),

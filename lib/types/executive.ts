@@ -71,7 +71,7 @@ export interface ExecutiveDashboardData {
 
 export interface RawModuleData {
   bankAccounts: { balance: number; account_type: string; currency: string }[];
-  transactions: { amount: number; is_income: boolean; transaction_date: string; category: string }[];
+  transactions: { amount: number; transaction_type: string; transaction_date: string; category_name: string }[];
   properties: { current_value: number; loan_balance: number; monthly_rent: number; country: string; currency: string; hoa_monthly: number; taxes_annual: number; insurance_annual: number; maintenance_monthly: number }[];
   propertyIncome: { amount: number; income_date: string; income_type: string }[];
   investments: { current_value: number; invested_capital: number; country: string; currency: string; category: string }[];

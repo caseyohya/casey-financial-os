@@ -1,74 +1,90 @@
 import { PageHeader } from "@/components/layout/PageHeader";
 import { MetricCard } from "@/components/dashboard/MetricCard";
-import { DashboardCard } from "@/components/dashboard/DashboardCard";
 import { EmptyState } from "@/components/dashboard/EmptyState";
-import { BarChartCard } from "@/components/charts/FinancialCharts";
-import { formatCurrency, formatPercent } from "@/lib/utils";
+import { TaxYearCard } from "@/components/tax/TaxYearCard";
+import { CreateTaxYearForm } from "@/components/tax/CreateTaxYearForm";
+
+export const dynamic = "force-dynamic";
+import { getTaxYears, getTaxYearByYear } from "@/lib/data/tax";
+import { buildAnnualTaxSummary } from "@/lib/calculations/tax";
+import { formatCurrency } from "@/lib/utils";
 import { FileText } from "lucide-react";
 
-const taxHistory = [
-  { name: "2021", value: 98500 },
-  { name: "2022", value: 112000 },
-  { name: "2023", value: 108500 },
-  { name: "2024", value: 124800 },
-  { name: "2025", value: 0 },
-];
+export default async function TaxPage() {
+  const taxYears = await getTaxYears();
 
-export default function TaxPage() {
+  const yearsWithSummaries = await Promise.all(
+    taxYears.map(async (year) => {
+      const data = await getTaxYearByYear(year.year);
+      const summary = data ? buildAnnualTaxSummary(data) : null;
+      return { year, summary };
+    })
+  );
+
+  const totalFlags = yearsWithSummaries.reduce(
+    (sum, y) => sum + (y.summary?.flags.length ?? 0),
+    0
+  );
+
+  const currentYear = new Date().getFullYear();
+  const activeSummary = yearsWithSummaries.find((y) => y.year.year === currentYear)?.summary
+    ?? yearsWithSummaries[0]?.summary;
+
   return (
     <div>
       <PageHeader
         title="Tax Intelligence"
-        description="Tax records, effective rates, and planning insights"
-      />
+        description="CPA-ready tax preparation organizer — structured by tax year"
+      >
+        <CreateTaxYearForm />
+      </PageHeader>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="2024 Total Tax" value={formatCurrency(124800)} />
-        <MetricCard
-          label="Effective Rate"
-          value="28.4%"
-          changeType="neutral"
-        />
-        <MetricCard label="Federal Tax" value={formatCurrency(89200)} />
-        <MetricCard label="State Tax" value={formatCurrency(35600)} />
+      <div className="mb-6 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-200">
+        This is an organizer and CPA-preparation tool only. It does not file taxes, provide legal tax advice, submit IRS forms, or connect to IRS systems.
       </div>
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-2">
-        <DashboardCard title="Tax Liability History" description="Annual total tax paid">
-          <BarChartCard data={taxHistory} />
-        </DashboardCard>
-
-        <DashboardCard title="2024 Tax Summary" description="Most recent filing">
-          <div className="space-y-4">
-            {[
-              { label: "Gross Income", value: formatCurrency(440000) },
-              { label: "Taxable Income", value: formatCurrency(385000) },
-              { label: "Federal Tax", value: formatCurrency(89200) },
-              { label: "State Tax (CA)", value: formatCurrency(35600) },
-              { label: "Effective Rate", value: formatPercent(28.4) },
-              { label: "Filing Status", value: "Married Filing Jointly" },
-            ].map((item) => (
-              <div
-                key={item.label}
-                className="flex items-center justify-between border-b border-navy-700 pb-3 last:border-0"
-              >
-                <span className="text-sm text-slate-400">{item.label}</span>
-                <span className="text-sm font-medium text-white">{item.value}</span>
-              </div>
-            ))}
-          </div>
-        </DashboardCard>
-      </div>
-
-      <div className="mt-8">
-        <DashboardCard title="Tax Records" description="Manual data entry">
-          <EmptyState
-            title="Add tax records"
-            description="Enter annual tax filings to track liability trends, effective rates, and plan for upcoming years."
-            icon={<FileText className="h-8 w-8" />}
+      {taxYears.length > 0 && (
+        <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <MetricCard label="Tax Years" value={String(taxYears.length)} />
+          <MetricCard
+            label="Open Flags"
+            value={String(totalFlags)}
+            changeType={totalFlags > 0 ? "negative" : "positive"}
           />
-        </DashboardCard>
-      </div>
+          {activeSummary && (
+            <>
+              <MetricCard
+                label={`${activeSummary.year} Income (USD)`}
+                value={formatCurrency(activeSummary.totalIncomeUsd)}
+              />
+              <MetricCard
+                label="Documents Complete"
+                value={`${activeSummary.documentsReceived}/${activeSummary.documentsRequired}`}
+              />
+            </>
+          )}
+        </div>
+      )}
+
+      {taxYears.length === 0 ? (
+        <EmptyState
+          title="Create your first tax year"
+          description="Organize banking, real estate, investments, foreign accounts, and documents by tax year. Generate CPA-ready CSV exports when you're ready."
+          icon={<FileText className="h-8 w-8" />}
+        />
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {yearsWithSummaries.map(({ year, summary }) => (
+            <TaxYearCard
+              key={year.id}
+              taxYear={year}
+              flagCount={summary?.flags.length ?? 0}
+              documentsComplete={summary?.documentsReceived ?? 0}
+              documentsTotal={summary?.documentsRequired ?? 0}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

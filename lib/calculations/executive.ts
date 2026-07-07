@@ -57,8 +57,12 @@ export function aggregateExecutiveKPIs(
     return d.getFullYear() === filters.year && d.getMonth() + 1 === filters.month;
   });
 
-  const monthlyIncome = monthTx.filter((t) => t.is_income).reduce((s, t) => s + t.amount, 0);
-  const monthlyExpenses = monthTx.filter((t) => !t.is_income).reduce((s, t) => s + Math.abs(t.amount), 0);
+  const monthlyIncome = monthTx
+    .filter((t) => t.transaction_type === "income")
+    .reduce((s, t) => s + t.amount, 0);
+  const monthlyExpenses = monthTx
+    .filter((t) => t.transaction_type === "expense")
+    .reduce((s, t) => s + Math.abs(t.amount), 0);
 
   const estimatedIncome = monthlyIncome || properties.reduce((s, p) => s + p.monthly_rent, 0);
   const estimatedExpenses =
@@ -240,12 +244,12 @@ export function buildExecutiveCharts(
   const incomeSources = [
     { name: "Rental Income", value: data.propertyIncome.length > 0 ? data.propertyIncome.reduce((s, i) => s + i.amount, 0) / Math.max(data.propertyIncome.length, 1) : data.properties.reduce((s, p) => s + p.monthly_rent, 0) },
     { name: "Distributions", value: data.distributions.filter((d) => { const dt = new Date(d.distribution_date); return dt.getFullYear() === filters.year && dt.getMonth() + 1 === filters.month; }).reduce((s, d) => s + d.amount, 0) },
-    { name: "Other Income", value: data.transactions.filter((t) => t.is_income).reduce((s, t) => s + t.amount, 0) },
+    { name: "Other Income", value: data.transactions.filter((t) => t.transaction_type === "income").reduce((s, t) => s + t.amount, 0) },
   ].filter((i) => i.value > 0);
 
   const expenseCategories = [
     { name: "Property", value: data.properties.reduce((s, p) => s + p.hoa_monthly + p.maintenance_monthly + p.taxes_annual / 12 + p.insurance_annual / 12, 0) },
-    { name: "Living", value: data.transactions.filter((t) => !t.is_income).reduce((s, t) => s + Math.abs(t.amount), 0) },
+    { name: "Living", value: data.transactions.filter((t) => t.transaction_type === "expense").reduce((s, t) => s + Math.abs(t.amount), 0) },
   ].filter((e) => e.value > 0);
 
   const realEstateNOITrend = historicalSnapshots.length > 0

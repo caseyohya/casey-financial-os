@@ -13,13 +13,13 @@ export function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-  const supabase = createClient();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setIsLoading(true);
 
+    const supabase = createClient();
     const { error: authError } = await supabase.auth.signInWithPassword({
       email,
       password,
