@@ -32,9 +32,27 @@ export async function fetchRawModuleData(userId: string): Promise<RawModuleData>
     capitalCalls,
     preciousMetals,
   ] = await Promise.all([
-    safeQuery(supabase.from("bank_accounts").select("balance, account_type, currency, country").eq("user_id", userId)),
-    safeQuery(supabase.from("bank_transactions").select("amount, transaction_type, transaction_date, category_name").eq("user_id", userId)),
-    safeQuery(supabase.from("properties").select("id, current_value, loan_balance, monthly_rent, country, currency, hoa_monthly, taxes_annual, insurance_annual, maintenance_monthly").eq("user_id", userId).eq("is_active", true)),
+    safeQuery(
+      supabase
+        .from("bank_accounts")
+        .select("balance, account_type, currency, currency_code, country")
+        .eq("user_id", userId)
+    ),
+    safeQuery(
+      supabase
+        .from("bank_transactions")
+        .select("amount, transaction_type, transaction_date, category_name")
+        .eq("user_id", userId)
+    ),
+    safeQuery(
+      supabase
+        .from("properties")
+        .select(
+          "id, current_value, loan_balance, monthly_rent, country, currency, currency_code, hoa_monthly, taxes_annual, insurance_annual, maintenance_monthly"
+        )
+        .eq("user_id", userId)
+        .eq("is_active", true)
+    ),
     safeQuery(supabase.from("property_income").select("amount, income_date, income_type, property_id").in("property_id", [])),
     safeQuery(supabase.from("investments").select("id, current_value, invested_capital, country, currency, category").eq("user_id", userId).eq("status", "active")),
     safeQuery(supabase.from("investment_distributions").select("amount, distribution_date, investment_id").in("investment_id", [])),
@@ -80,11 +98,34 @@ export async function fetchRawModuleData(userId: string): Promise<RawModuleData>
     .reduce((s: number, c: { amount: number }) => s + c.amount, 0);
 
   return {
-    bankAccounts: bankAccounts ?? [],
+    bankAccounts: (bankAccounts ?? []).map((a: Record<string, unknown>) => ({
+      balance: Number(a.balance ?? 0),
+      account_type: String(a.account_type ?? "checking"),
+      currency: String(a.currency ?? a.currency_code ?? "USD"),
+      country: String(a.country ?? "US"),
+    })),
     transactions: transactions ?? [],
-    properties: propertyList,
+    properties: propertyList.map((p: Record<string, unknown>) => ({
+      id: p.id as string,
+      current_value: Number(p.current_value ?? 0),
+      loan_balance: Number(p.loan_balance ?? 0),
+      monthly_rent: Number(p.monthly_rent ?? 0),
+      country: String(p.country ?? "US"),
+      currency: String(p.currency ?? p.currency_code ?? "USD"),
+      hoa_monthly: Number(p.hoa_monthly ?? 0),
+      taxes_annual: Number(p.taxes_annual ?? 0),
+      insurance_annual: Number(p.insurance_annual ?? 0),
+      maintenance_monthly: Number(p.maintenance_monthly ?? 0),
+    })),
     propertyIncome: incomeData,
-    investments: investmentList,
+    investments: investmentList.map((i: Record<string, unknown>) => ({
+      id: i.id as string,
+      current_value: Number(i.current_value ?? 0),
+      invested_capital: Number(i.invested_capital ?? i.cost_basis ?? 0),
+      country: String(i.country ?? "US"),
+      currency: String(i.currency ?? i.currency_code ?? "USD"),
+      category: String(i.category ?? i.investment_type ?? "other"),
+    })),
     distributions: distData,
     taxRecords: taxRecords ?? [],
     netWorthSnapshots: netWorthSnapshots ?? [],

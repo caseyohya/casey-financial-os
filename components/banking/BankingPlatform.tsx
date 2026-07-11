@@ -112,11 +112,50 @@ export function BankingPlatform({ userId }: BankingPlatformProps) {
       if (catRes.error) throw catRes.error;
       if (recRes.error) throw recRes.error;
 
-      setAccounts((accRes.data ?? []) as BankAccount[]);
-      setTransactions((txRes.data ?? []) as BankTransaction[]);
-      setBalances((balRes.data ?? []) as BankBalance[]);
+      setAccounts(
+        (accRes.data ?? []).map((row) => {
+          const a = row as Record<string, unknown>;
+          return {
+            ...a,
+            institution: String(a.institution ?? a.bank_name ?? ""),
+            currency: String(a.currency ?? a.currency_code ?? "USD"),
+            balance: Number(a.balance ?? 0),
+          };
+        }) as BankAccount[]
+      );
+      setTransactions(
+        (txRes.data ?? []).map((row) => {
+          const t = row as Record<string, unknown>;
+          return {
+            ...t,
+            account_id: String(t.account_id ?? t.bank_account_id ?? ""),
+            currency: String(t.currency ?? t.currency_code ?? "USD"),
+            category_name: String(t.category_name ?? "uncategorized"),
+          };
+        }) as BankTransaction[]
+      );
+      setBalances(
+        (balRes.data ?? []).map((row) => {
+          const b = row as Record<string, unknown>;
+          return {
+            ...b,
+            account_id: String(b.account_id ?? b.bank_account_id ?? ""),
+            currency: String(b.currency ?? b.currency_code ?? "USD"),
+          };
+        }) as BankBalance[]
+      );
       setCategories((catRes.data ?? []) as TransactionCategory[]);
-      setRecurring((recRes.data ?? []) as RecurringTransaction[]);
+      setRecurring(
+        (recRes.data ?? []).map((row) => {
+          const r = row as Record<string, unknown>;
+          return {
+            ...r,
+            account_id: String(r.account_id ?? r.bank_account_id ?? ""),
+            currency: String(r.currency ?? r.currency_code ?? "USD"),
+            next_occurrence: String(r.next_occurrence ?? r.next_date ?? ""),
+          };
+        }) as RecurringTransaction[]
+      );
     } catch (err) {
       console.error("Failed to load banking data:", err);
     } finally {
@@ -198,9 +237,11 @@ export function BankingPlatform({ userId }: BankingPlatformProps) {
         user_id: userId,
         name: accountForm.name,
         institution: accountForm.institution,
+        bank_name: accountForm.institution,
         account_type: accountForm.account_type,
         balance: parseFloat(accountForm.balance) || 0,
         currency: accountForm.currency,
+        currency_code: accountForm.currency,
         country: accountForm.country,
         exchange_rate_to_usd:
           accountForm.currency === "JPY"
@@ -244,9 +285,11 @@ export function BankingPlatform({ userId }: BankingPlatformProps) {
       const { error: balError } = await supabase.from("bank_balances").insert({
         user_id: userId,
         account_id: balanceForm.account_id,
+        bank_account_id: balanceForm.account_id,
         balance,
         balance_date: balanceForm.balance_date,
         currency: account.currency,
+        currency_code: account.currency,
         exchange_rate_to_usd:
           account.currency === "JPY"
             ? parseFloat(balanceForm.exchange_rate_to_usd) || account.exchange_rate_to_usd
@@ -283,9 +326,11 @@ export function BankingPlatform({ userId }: BankingPlatformProps) {
       const payload = {
         user_id: userId,
         account_id: transactionForm.account_id,
+        bank_account_id: transactionForm.account_id,
         description: transactionForm.description,
         amount: parseFloat(transactionForm.amount),
         currency: account.currency,
+        currency_code: account.currency,
         exchange_rate_to_usd:
           account.currency === "JPY"
             ? parseFloat(transactionForm.exchange_rate_to_usd) || account.exchange_rate_to_usd

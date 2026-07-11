@@ -41,18 +41,35 @@ npm install
 cp .env.local.example .env.local
 ```
 
-Edit `.env.local` with your Supabase project URL and anon key.
+Edit `.env.local` with your Supabase project URL and anon key from [Supabase Dashboard → Project Settings → API](https://supabase.com/dashboard).
 
-4. Set up the database:
+4. Set up the database (all six apps):
 
-Run `database/schema.sql` in the Supabase SQL Editor, then run module schemas as needed:
-- `database/real-estate-schema.sql` — Real Estate Platform
-- `database/investment-schema.sql` — Investment Platform
-- `database/executive-schema.sql` — Executive Dashboard summaries
+Apply both migrations in order via Supabase CLI or the SQL Editor:
 
-5. Create Supabase Storage buckets (private): `property-documents`, `investment-documents`
+```bash
+# Option A: Supabase CLI (recommended)
+supabase link --project-ref <your-project-ref>
+supabase db push
 
-6. Start the development server:
+# Option B: SQL Editor — paste and run each file:
+#   supabase/migrations/20250705000000_casey_financial_os_schema.sql
+#   supabase/migrations/20250711000000_app_module_alignment.sql
+```
+
+5. Verify all apps are connected:
+
+```bash
+npm run db:verify
+```
+
+Or open `/api/health/supabase` while the dev server is running.
+
+6. Create Supabase Storage buckets (created automatically by the alignment migration):
+   - `property-documents` (private)
+   - `investment-documents` (private)
+
+7. Start the development server:
 
 ```bash
 npm run dev
