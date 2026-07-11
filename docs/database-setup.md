@@ -6,10 +6,12 @@ This guide covers deploying the Supabase/PostgreSQL database for all six Casey F
 
 | Component | Path |
 |-----------|------|
-| Schema migration | `database/schema.sql` |
+| Base schema migration | `supabase/migrations/20250705000000_casey_financial_os_schema.sql` |
+| App module alignment | `supabase/migrations/20250711000000_app_module_alignment.sql` |
 | Seed data | `database/seed.sql` |
 | TypeScript types | `database/types/database.types.ts` |
-| Supabase CLI migration | `supabase/migrations/20250705000000_casey_financial_os_schema.sql` |
+| Verify script | `npm run db:verify` |
+| Health endpoint | `/api/health/supabase` |
 
 ### Applications Supported
 

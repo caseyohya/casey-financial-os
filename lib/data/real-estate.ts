@@ -103,6 +103,7 @@ export function propertyFormToRow(data: PropertyFormData, userId: string) {
     postal_code: data.postal_code || null,
     country: data.country,
     currency: data.currency,
+    currency_code: data.currency,
     property_type: data.property_type,
     purchase_price: data.purchase_price,
     purchase_date: data.purchase_date || null,

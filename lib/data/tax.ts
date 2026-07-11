@@ -89,6 +89,8 @@ export function taxYearFormToRow(data: TaxYearFormData, userId: string) {
   return {
     user_id: userId,
     year: data.year,
+    tax_year: data.year,
+    country: "US",
     filing_status: data.filing_status,
     status: data.status,
     usd_to_jpy_rate: data.usd_to_jpy_rate ?? null,
