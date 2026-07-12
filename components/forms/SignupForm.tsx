@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { InputField, Button } from "@/components/forms/FormFields";
 import { APP_NAME } from "@/lib/utils/navigation";
 
@@ -21,6 +22,14 @@ export function SignupForm() {
     setError(null);
     setMessage(null);
     setIsLoading(true);
+
+    if (!isSupabaseConfigured()) {
+      setError(
+        "Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local."
+      );
+      setIsLoading(false);
+      return;
+    }
 
     const supabase = createClient();
     const { error: authError } = await supabase.auth.signUp({
