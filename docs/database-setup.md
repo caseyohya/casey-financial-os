@@ -6,10 +6,13 @@ This guide covers deploying the Supabase/PostgreSQL database for all six Casey F
 
 | Component | Path |
 |-----------|------|
-| Schema migration | `database/schema.sql` |
+| Foundation schema | `database/schema.sql` |
+| Financial Hub schema | `database/financial-hub-schema.sql` |
+| Module schemas | `database/banking_schema.sql`, `real-estate-schema.sql`, `investment-schema.sql`, `tax-schema.sql`, `executive-schema.sql` |
 | Seed data | `database/seed.sql` |
+| Unified migration | `supabase/migrations/20250705000000_casey_financial_os_schema.sql` |
+| App runtime compat | `supabase/migrations/20250712000000_app_runtime_compat.sql` |
 | TypeScript types | `database/types/database.types.ts` |
-| Supabase CLI migration | `supabase/migrations/20250705000000_casey_financial_os_schema.sql` |
 
 ### Applications Supported
 
@@ -18,7 +21,30 @@ This guide covers deploying the Supabase/PostgreSQL database for all six Casey F
 3. **Real Estate Platform** — properties, mortgages, tenants, income/expenses
 4. **Investment Platform** — investments, entities, distributions, capital calls
 5. **Tax Intelligence Platform** — tax years, forms, FBAR, Schedule E, K-1
-6. **Executive Dashboard** — nine aggregation views
+6. **Executive Dashboard** — upsertable summary tables (not read-only views)
+
+### Recommended deploy paths
+
+**Path A — Supabase CLI (preferred):**
+
+```bash
+supabase db reset   # applies both migrations in order, including app runtime compat
+```
+
+**Path B — Modular SQL Editor deploy (matches historical module branches):**
+
+Run in order:
+
+1. `database/schema.sql`
+2. `database/financial-hub-schema.sql`
+3. `database/banking_schema.sql`
+4. `database/real-estate-schema.sql`
+5. `database/investment-schema.sql`
+6. `database/tax-schema.sql`
+7. `database/executive-schema.sql`
+8. `database/seed.sql` (dev only)
+
+> Do **not** apply only the unified migration without the compat migration. App code expects columns such as `account_id`, `currency`, `year`, `status`, and executive **tables** that support upsert.
 
 ## Prerequisites
 
