@@ -1,9 +1,8 @@
+import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ExecutiveDashboardClient } from "@/components/executive/ExecutiveDashboardClient";
 import {
   getExecutiveDashboardData,
-  fetchRawModuleData,
-  fetchHistoricalSummaries,
   refreshExecutiveSummaries,
 } from "@/lib/data/executive";
 import { createClient } from "@/lib/supabase/server";
@@ -12,15 +11,13 @@ export const dynamic = "force-dynamic";
 
 export default async function ExecutiveDashboardPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!user) return null;
+  if (!user) redirect("/login");
 
-  const initialData = await getExecutiveDashboardData();
-  const [rawData, historical] = await Promise.all([
-    fetchRawModuleData(user.id),
-    fetchHistoricalSummaries(user.id),
-  ]);
+  const { data: initialData, rawData, historical } = await getExecutiveDashboardData();
 
   await refreshExecutiveSummaries(user.id, initialData.filters).catch(() => {});
 

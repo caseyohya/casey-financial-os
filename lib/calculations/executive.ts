@@ -21,6 +21,24 @@ function filterByCountry<T extends { country?: string }>(items: T[], filter: Exe
   return items.filter((i) => matchesCountry(i.country ?? "US", filter));
 }
 
+function normalizeToMonthly(amount: number, frequency: string): number {
+  switch (frequency) {
+    case "monthly":
+      return amount;
+    case "weekly":
+      return (amount * 52) / 12;
+    case "biweekly":
+      return (amount * 26) / 12;
+    case "quarterly":
+      return amount / 3;
+    case "annually":
+      return amount / 12;
+    case "one_time":
+    default:
+      return 0;
+  }
+}
+
 export function aggregateExecutiveKPIs(
   data: RawModuleData,
   filters: ExecutiveFilters
@@ -41,15 +59,28 @@ export function aggregateExecutiveKPIs(
     ["credit", "loan"].includes(a.account_type)
   );
 
-  const cashPosition = cashAccounts.reduce((s, a) => s + a.balance, 0);
+  const bankCash = cashAccounts.reduce((s, a) => s + a.balance, 0);
   const bankLiabilities = liabilityAccounts.reduce((s, a) => s + Math.abs(a.balance), 0);
 
+  const hubCash = (data.hubAccounts ?? [])
+    .filter((a) => a.is_active && !["credit", "loan"].includes(a.account_type))
+    .reduce((s, a) => s + a.balance, 0);
+  const hubCredit = (data.hubAccounts ?? [])
+    .filter((a) => a.is_active && ["credit", "loan"].includes(a.account_type))
+    .reduce((s, a) => s + Math.abs(a.balance), 0);
+  const hubAssetValue = (data.hubAssets ?? []).reduce((s, a) => s + a.current_value, 0);
+  const hubLiabilityValue = (data.hubLiabilities ?? []).reduce(
+    (s, l) => s + l.current_balance,
+    0
+  );
+
+  const cashPosition = bankCash + hubCash;
   const propertyValue = properties.reduce((s, p) => s + p.current_value, 0);
   const propertyLoans = properties.reduce((s, p) => s + p.loan_balance, 0);
   const investmentValue = investments.reduce((s, i) => s + i.current_value, 0) + data.preciousMetalsValue;
 
-  const totalAssets = cashPosition + propertyValue + investmentValue;
-  const totalLiabilities = bankLiabilities + propertyLoans;
+  const totalAssets = cashPosition + hubAssetValue + propertyValue + investmentValue;
+  const totalLiabilities = bankLiabilities + hubCredit + hubLiabilityValue + propertyLoans;
   const netWorth = totalAssets - totalLiabilities;
 
   const monthTx = data.transactions.filter((t) => {
@@ -64,9 +95,23 @@ export function aggregateExecutiveKPIs(
     .filter((t) => t.transaction_type === "expense")
     .reduce((s, t) => s + Math.abs(t.amount), 0);
 
-  const estimatedIncome = monthlyIncome || properties.reduce((s, p) => s + p.monthly_rent, 0);
+  const hubMonthlyIncome = (data.hubIncomeSources ?? [])
+    .filter((source) => source.is_active)
+    .reduce((s, source) => s + normalizeToMonthly(source.amount, source.frequency), 0);
+  const hubMonthlyExpenses = (data.hubExpenses ?? [])
+    .filter((expense) => expense.is_active)
+    .reduce((s, expense) => s + normalizeToMonthly(expense.amount, expense.frequency), 0);
+  const hubPassiveIncome = (data.hubIncomeSources ?? [])
+    .filter((source) => source.is_active && source.is_passive)
+    .reduce((s, source) => s + normalizeToMonthly(source.amount, source.frequency), 0);
+
+  const estimatedIncome =
+    monthlyIncome ||
+    hubMonthlyIncome ||
+    properties.reduce((s, p) => s + p.monthly_rent, 0);
   const estimatedExpenses =
     monthlyExpenses ||
+    hubMonthlyExpenses ||
     properties.reduce(
       (s, p) => s + p.hoa_monthly + p.taxes_annual / 12 + p.insurance_annual / 12 + p.maintenance_monthly,
       0
@@ -87,7 +132,9 @@ export function aggregateExecutiveKPIs(
     .reduce((s, i) => s + i.amount, 0);
 
   const rentalIncome = monthRental || properties.reduce((s, p) => s + p.monthly_rent, 0);
-  const passiveIncome = rentalIncome + monthDist;
+  // Prefer recorded rental + distributions; fall back to hub passive sources when none exist
+  const passiveIncome =
+    rentalIncome + monthDist > 0 ? rentalIncome + monthDist : hubPassiveIncome;
   const passiveIncomeProgress = (passiveIncome / PASSIVE_INCOME_TARGET) * 100;
 
   let realEstateNOI = 0;
@@ -176,26 +223,23 @@ export function buildExecutiveCharts(
   filters: ExecutiveFilters,
   historicalSnapshots: { year: number; month: number; net_worth: number; cash_flow: number; passive_income: number; noi: number; distributions: number }[]
 ): ExecutiveChartData {
-  const netWorthTrend = historicalSnapshots.length > 0
-    ? historicalSnapshots.map((s) => ({
-        name: `${MONTH_NAMES[s.month - 1]} ${String(s.year).slice(2)}`,
-        value: s.net_worth,
-      }))
-    : data.netWorthSnapshots.slice(-6).map((s) => ({
-        name: new Date(s.snapshot_date).toLocaleDateString("en-US", { month: "short" }),
-        value: s.net_worth,
-      }));
+  const netWorthTrend =
+    historicalSnapshots.length > 0
+      ? historicalSnapshots.map((s) => ({
+          name: `${MONTH_NAMES[s.month - 1]} ${String(s.year).slice(2)}`,
+          value: s.net_worth,
+        }))
+      : data.netWorthSnapshots.slice(-6).map((s) => ({
+          name: new Date(s.snapshot_date).toLocaleDateString("en-US", { month: "short" }),
+          value: s.net_worth,
+        }));
 
-  if (netWorthTrend.length === 0) {
-    for (let i = 5; i >= 0; i--) {
-      const m = filters.month - i;
-      const y = m <= 0 ? filters.year - 1 : filters.year;
-      const month = m <= 0 ? m + 12 : m;
-      netWorthTrend.push({
-        name: `${MONTH_NAMES[month - 1]} ${String(y).slice(2)}`,
-        value: kpis.netWorth * (0.92 + i * 0.015),
-      });
-    }
+  // Current period only when no historical snapshots exist (do not invent trend data)
+  if (netWorthTrend.length === 0 && kpis.netWorth !== 0) {
+    netWorthTrend.push({
+      name: `${MONTH_NAMES[filters.month - 1]} ${String(filters.year).slice(2)}`,
+      value: kpis.netWorth,
+    });
   }
 
   const cashFlowTrend = historicalSnapshots.length > 0

@@ -1,209 +1,254 @@
 # Casey Financial OS — System Validation Report
 
-**Date:** July 7, 2026  
-**Branch:** `cursor/system-validation-24ff`  
-**Base:** `cursor/executive-dashboard-319d` with integrated modules from banking, tax, supabase-backend, and new Financial Hub CRUD
+**Date:** July 17, 2026  
+**Branch:** `cursor/system-validation-6caa`  
+**Base:** `main`
 
 ---
 
 ## Executive Summary
 
-A full system validation was performed across all six apps. The codebase was consolidated from multiple feature branches, build and TypeScript errors were fixed, and missing Financial Hub CRUD functionality was implemented. The application **builds successfully** and all routes are registered. Live Supabase connectivity requires valid environment variables and a deployed database schema.
+Full system validation was performed without adding new product features. Production build, TypeScript, and ESLint all pass. Schema drift between the unified Supabase migration and app module queries was the main runtime risk; the app-runtime compatibility migration and hardened executive data layer were applied so all six modules share one deploy path. Live Supabase auth/CRUD/RLS could not be exercised in this environment because `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` are not configured and Docker/Supabase CLI are unavailable.
 
 ---
 
-## 1. App Routing
+## Commands Used
 
-| App | Route | Status | Notes |
-|-----|-------|--------|-------|
-| Executive Dashboard (6) | `/executive-dashboard` | ✅ Works | Dynamic server page with KPI aggregation |
-| Financial Hub (1) | `/financial-hub` | ✅ Works | Full CRUD for accounts, assets, liabilities, income, expenses |
-| Banking Platform (2) | `/banking` | ✅ Works | Integrated from `banking-platform-app2` branch |
-| Real Estate (3) | `/real-estate` | ✅ Works | List, create, edit, detail pages |
-| Investments (4) | `/investments` | ✅ Works | List, create, edit, detail pages |
-| Tax Intelligence (5) | `/tax` | ✅ Works | Tax year list + `/tax/[year]` workspace |
-
-**Navigation:** Sidebar (`lib/utils/navigation.ts`) links all six apps. Middleware redirects unauthenticated users to `/login` and authenticated users away from auth pages to `/executive-dashboard`.
-
-**Auth routes:** `/login`, `/signup`, `/auth/callback` — all present.
-
-**API routes:** Executive, investment, real-estate, and tax export endpoints registered.
-
----
-
-## 2. Supabase Connection
-
-| Check | Status | Notes |
-|-------|--------|-------|
-| Client setup (`lib/supabase/client.ts`) | ✅ | Browser client via `@supabase/ssr` |
-| Server setup (`lib/supabase/server.ts`) | ✅ | Cookie-based server client |
-| Middleware session refresh | ✅ | `middleware.ts` → `lib/supabase/middleware.ts` |
-| Environment variables | ⚠️ Config required | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` in `.env.local` |
-| Build without env vars | ✅ Fixed | Placeholder fallbacks in `lib/supabase/env.ts` prevent build crashes |
-| Database queries | ⚠️ Requires live DB | All data layers use Supabase `.from()` with RLS |
-
-**Action required:** Copy `.env.local.example` to `.env.local` and apply the migration at `supabase/migrations/20250705000000_casey_financial_os_schema.sql` to your Supabase project.
-
----
-
-## 3. Authentication
-
-| Check | Status | Notes |
-|-------|--------|-------|
-| Signup | ✅ | `SignupForm` → `supabase.auth.signUp()` |
-| Login | ✅ | `LoginForm` → `signInWithPassword()` → redirect to dashboard |
-| Logout | ✅ | Available via `DashboardLayout` session management |
-| Protected routes | ✅ | Middleware blocks unauthenticated access to all dashboard routes |
-| OAuth callback | ✅ | `/auth/callback` exchanges code for session |
-| Profile auto-create | ✅ | `handle_new_user()` trigger in migration |
-
----
-
-## 4. Database Schema
-
-**Canonical schema:** `supabase/migrations/20250705000000_casey_financial_os_schema.sql`
-
-| Table | Exists | `created_at` | `updated_at` | Foreign Keys |
-|-------|--------|--------------|--------------|--------------|
-| `accounts` | ✅ | ✅ | ✅ | `user_id` → `auth.users` |
-| `assets` | ✅ | ✅ | ✅ | `user_id` → `auth.users` |
-| `liabilities` | ✅ | ✅ | ✅ | `user_id` → `auth.users` |
-| `income_sources` | ✅ | ✅ | ✅ | `user_id` → `auth.users` |
-| `expenses` | ✅ | ✅ | ✅ | `user_id` → `auth.users` |
-| `bank_accounts` | ✅ | ✅ | ✅ | `user_id` → `auth.users` |
-| `bank_transactions` | ✅ | ✅ | — | `account_id` → `bank_accounts` |
-| `properties` | ✅ | ✅ | ✅ | `user_id` → `auth.users` |
-| `investments` | ✅ | ✅ | ✅ | `user_id` → `auth.users` |
-| `tax_years` | ✅ | ✅ | ✅ | `user_id` → `auth.users` |
-
-**Additional schemas:** `database/banking_schema.sql`, `database/investment-schema.sql`, `database/real-estate-schema.sql`, `database/tax-schema.sql` provide module-specific extensions. The unified migration is the single source of truth.
-
-**47 tables** with RLS enabled; **185 policies** enforcing `auth.uid() = user_id` pattern.
-
----
-
-## 5. Row Level Security
-
-| Check | Status |
-|-------|--------|
-| RLS enabled on all financial tables | ✅ (47 tables) |
-| Users can only access own data | ✅ (`auth.uid() = user_id` policies) |
-| No public access to private data | ✅ (authenticated role required) |
-| System tables (currencies) | ✅ Read-only for authenticated users |
-
-**Verification query** (from `docs/database-setup.md`):
-```sql
-SELECT tablename, rowsecurity FROM pg_tables
-WHERE schemaname = 'public' AND rowsecurity = true;
+```bash
+npm install
+npx tsc --noEmit
+npm run lint
+npm run build
+node scripts/verify-calculations.mjs
 ```
 
 ---
 
-## 6. Manual Data Entry (CRUD)
+## Final Build Result
 
-| Entity | View | Add | Edit | Delete | Module |
-|--------|------|-----|------|--------|--------|
-| `accounts` | ✅ | ✅ | ✅ | ✅ | Financial Hub |
-| `assets` | ✅ | ✅ | ✅ | ✅ | Financial Hub |
-| `liabilities` | ✅ | ✅ | ✅ | ✅ | Financial Hub |
-| `income_sources` | ✅ | ✅ | ✅ | ✅ | Financial Hub |
-| `expenses` | ✅ | ✅ | ✅ | ✅ | Financial Hub |
-| `bank_accounts` | ✅ | ✅ | ✅ | ✅ | Banking Platform |
-| `bank_transactions` | ✅ | ✅ | ✅ | ✅ | Banking Platform |
-| `properties` | ✅ | ✅ | ✅ | ✅ | Real Estate |
-| `investments` | ✅ | ✅ | ✅ | ✅ | Investments |
-| `tax_years` | ✅ | ✅ | ✅ | ✅ | Tax Intelligence |
+| Check | Command | Result |
+|-------|---------|--------|
+| TypeScript | `npx tsc --noEmit` | ✅ Exit 0 |
+| ESLint | `npm run lint` | ✅ No warnings or errors |
+| Production build | `npm run build` | ✅ Success — 16 routes + middleware |
+| Offline KPI formulas | `node scripts/verify-calculations.mjs` | ✅ All checks passed |
 
----
+**Build note (non-blocking):** Supabase JS uses `process.version` inside Edge middleware. Warning only; build succeeds.
 
-## 7. Dashboard Calculations
+**Registered routes:**
 
-| Metric | Implementation | Status |
-|--------|----------------|--------|
-| Total Assets | `lib/calculations/executive.ts` + `financial-hub.ts` | ✅ |
-| Total Liabilities | Same | ✅ |
-| Net Worth | Assets − Liabilities | ✅ |
-| Monthly Income | Transaction + income source aggregation | ✅ |
-| Monthly Expenses | Transaction + expense aggregation | ✅ |
-| Monthly Cash Flow | Income − Expenses | ✅ |
-| Passive Income | Rental + distributions + passive income sources | ✅ |
-| Real Estate NOI | Rent − operating expenses per property | ✅ |
-| Investment ROI | `(current_value − invested_capital) / invested_capital` | ✅ |
-| Tax summary totals | `executive_tax_summary` + `tax_years` data | ✅ |
-
-**Fix applied:** Executive dashboard now queries `bank_transactions` (not legacy `transactions` table) and uses `transaction_type` field for income/expense classification.
+| Route | Status |
+|-------|--------|
+| `/` | ✅ |
+| `/login`, `/signup`, `/auth/callback` | ✅ |
+| `/executive-dashboard` | ✅ |
+| `/financial-hub` | ✅ |
+| `/banking` | ✅ |
+| `/real-estate`, `/real-estate/new`, `/real-estate/[id]`, `/real-estate/[id]/edit` | ✅ |
+| `/investments`, `/investments/new`, `/investments/[id]`, `/investments/[id]/edit` | ✅ |
+| `/tax`, `/tax/[year]` | ✅ |
+| Export APIs (executive / investments / real-estate / tax) | ✅ |
 
 ---
 
-## 8. Error Handling — Fixes Applied
+## Tests Performed
 
-| Issue | Fix |
-|-------|-----|
-| Build crash: missing Supabase env vars during static generation | Added `lib/supabase/env.ts` with safe fallbacks; lazy Supabase client init in auth forms |
-| TypeScript: `StatusBadge` missing `"neutral"` variant | Added `neutral` status to `StatusBadge` |
-| Executive dashboard querying wrong transactions table | Changed to `bank_transactions` with `transaction_type` |
-| Financial Hub placeholder page (static mock data) | Replaced with full Supabase-backed CRUD |
-| Banking page placeholder | Merged `BankingPlatform` from banking branch |
-| Tax page placeholder | Merged tax intelligence module from tax branch |
-| Missing unified schema in repo | Added `supabase/migrations/` from supabase-backend branch |
-
-**Build result:** `npm run build` — ✅ Success (16 static + dynamic routes)  
-**Lint result:** `npm run lint` — ✅ No errors
+1. Dependency install and production compile
+2. Full TypeScript check (`tsc --noEmit`)
+3. ESLint via `next lint`
+4. Static route inventory vs sidebar navigation (six apps)
+5. Auth flow code review (login, signup, logout, middleware protection, callback)
+6. Supabase env helper review (`lib/supabase/env.ts`, login/signup guards)
+7. Static schema/RLS analysis of both migrations
+8. CRUD code-path review for all required entities
+9. Offline dashboard calculation verification against synthetic TEST seed values
+10. Seed file review (synthetic `TEST —` labels only; no personal data)
 
 ---
 
-## 9. Testing
+## Items That Passed
 
-| Check | Status | Notes |
-|-------|--------|-------|
-| Test seed data | ✅ Added | `database/seed.sql` with sample records for all modules |
-| Dashboard updates with data | ⚠️ Manual | Requires live Supabase + seed data insertion |
-| Production build | ✅ Passes | Verified July 7, 2026 |
-| Automated unit tests | ❌ Not present | No Jest/Vitest configured (pre-existing gap) |
+| Area | Status | Notes |
+|------|--------|-------|
+| Build / TypeScript / Lint | ✅ | Clean |
+| Six app routes registered | ✅ | Matches `lib/utils/navigation.ts` |
+| Auth scaffolding | ✅ | Middleware protects dashboard; login/signup/logout wired |
+| Env helpers | ✅ | Placeholders prevent build crash; login/signup surface config error |
+| Required tables in schema | ✅ | accounts, assets, liabilities, income_sources, expenses, bank_accounts, properties, investments, tax_years |
+| RLS on required tables | ✅ | Enabled; SELECT/INSERT/UPDATE/DELETE policies use `auth.uid() = user_id` |
+| Financial Hub CRUD | ✅ | Server actions for add/view/edit/delete |
+| Banking CRUD | ✅ | Client UI for bank accounts (+ transactions/balances) |
+| Real Estate parent CRUD | ✅ | List/create/edit/delete property |
+| Investments parent CRUD | ✅ | List/create/edit/delete investment |
+| Tax years CRUD | ✅ | Create/view/update + delete button wired |
+| Offline KPI formulas | ✅ | total assets/liabilities/net worth, income/expenses/cash flow, passive income, RE NOI, investment gains/ROI |
 
-**Seed instructions:**
-1. Apply migration to Supabase
-2. Create user via signup or Supabase dashboard
-3. Replace `:USER_ID` in `database/seed.sql` and run in SQL editor
+### Offline calculation results (TEST seed)
+
+| Metric | Expected | Result |
+|--------|----------|--------|
+| Total assets | $1,563,000 | ✅ |
+| Total liabilities | $231,700 | ✅ |
+| Net worth | $1,331,300 | ✅ |
+| Monthly income | $19,000 | ✅ |
+| Monthly expenses | $5,450 | ✅ |
+| Monthly cash flow | $13,550 | ✅ |
+| Passive income | $4,000 | ✅ |
+| Real estate NOI | $1,700 | ✅ |
+| Investment gains | $85,000 | ✅ |
+| Avg investment ROI | ~20.33% | ✅ |
 
 ---
 
-## 10. What Still Needs Attention
+## Errors Found
 
-| Priority | Item | Details |
-|----------|------|---------|
-| High | Deploy database schema | Run `supabase/migrations/20250705000000_casey_financial_os_schema.sql` on Supabase |
-| High | Configure `.env.local` | Set real `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` |
-| Medium | Merge to `main` | Code currently on validation branch; `main` is still a stub README |
-| Medium | Schema alignment | Foundation `database/schema.sql` differs from unified migration; use migration as canonical |
-| Medium | Banking schema extensions | `database/banking_schema.sql` adds `bank_transactions`, categories — ensure applied after base migration |
-| Low | Automated tests | Add Vitest/Jest for calculation functions |
-| Low | Plaid integration | Explicitly excluded per requirements |
-| Low | Edge runtime warning | Supabase client uses Node APIs in middleware (warning only, not blocking) |
+| Severity | Issue |
+|----------|-------|
+| High | Unified migration alone did not match app column names (`currency` vs `currency_code`, `account_id` vs `bank_account_id`, `year` vs `tax_year`, investment `status` vs `is_active`) |
+| High | Executive upserts targeted `executive_*` **views** in the base migration; app expects writable tables |
+| High | Executive queried `tax_records` / `net_worth_snapshots` without fallbacks |
+| Medium | Executive ignored Financial Hub tables, so hub-only seed data understated net worth / cash flow |
+| Medium | Precious metals with only `current_value` (no quantity) contributed `$0` |
+| Medium | Executive page returned `null` instead of redirecting unauthenticated users |
+| Medium | Auth callback accepted unvalidated `next` paths |
+| Medium | Tax year delete action existed but was not exposed in UI |
+| Medium | Net-worth chart fabricated synthetic history when empty |
+| Low | No `.env.local` / live Supabase in this agent environment |
+| Low | Edge middleware Node API warning from `@supabase/supabase-js` |
 
 ---
 
-## Files Changed in This Validation
+## Fixes Made
 
-- `lib/supabase/env.ts` — new, safe env handling
-- `lib/supabase/client.ts`, `server.ts`, `middleware.ts` — use env helper
-- `components/forms/LoginForm.tsx`, `SignupForm.tsx` — lazy client init
-- `components/dashboard/StatusBadge.tsx` — added `neutral` status
-- `components/financial-hub/FinancialHubClient.tsx` — new CRUD UI
-- `app/(dashboard)/financial-hub/page.tsx`, `actions.ts` — new data layer
-- `lib/types/financial-hub.ts`, `lib/data/financial-hub.ts`, `lib/calculations/financial-hub.ts` — new
-- `lib/types/index.ts` — merged banking types
-- `lib/data/executive.ts`, `lib/calculations/executive.ts` — bank_transactions fix
-- `app/(dashboard)/banking/page.tsx` — integrated BankingPlatform
-- `app/(dashboard)/tax/page.tsx` — integrated tax module
-- `components/banking/*`, `lib/banking/*` — merged from banking branch
-- `components/tax/*`, `lib/data/tax.ts`, etc. — merged from tax branch
-- `supabase/migrations/*` — unified schema from supabase-backend branch
-- `database/seed.sql` — updated test data
-- `docs/validation-report.md` — this report
+| Fix | Location |
+|-----|----------|
+| App runtime compatibility migration | `supabase/migrations/20250712000000_app_runtime_compat.sql` |
+| Financial Hub modular schema for SQL Editor path | `database/financial-hub-schema.sql` |
+| Resilient executive data layer (column normalization, tax/snapshot fallbacks, hub tables, precious metals) | `lib/data/executive.ts`, `lib/types/executive.ts` |
+| Executive KPIs include Financial Hub + remove invented chart history | `lib/calculations/executive.ts` |
+| Single-fetch executive page + redirect to login | `app/(dashboard)/executive-dashboard/page.tsx` |
+| Clear auth errors when Supabase env missing | `components/forms/LoginForm.tsx`, `SignupForm.tsx` |
+| Safer auth callback `next` path | `app/auth/callback/route.ts` |
+| Tax year delete UI | `components/tax/DeleteTaxYearButton.tsx`, `TaxYearCard.tsx` |
+| Mobile-friendly sidebar/layout (from prior validation) | `components/layout/Sidebar.tsx`, `DashboardLayout.tsx` |
+| Deploy docs corrected | `docs/database-setup.md` |
+| Clearly labeled synthetic TEST seed | `database/seed.sql` |
+| Offline calculation verifier | `scripts/verify-calculations.mjs` |
+
+---
+
+## Unresolved Issues
+
+| Priority | Issue | Why unresolved |
+|----------|-------|----------------|
+| P0 | Live Supabase not configured in this environment | No env vars; no Docker/Supabase CLI |
+| P0 | End-to-end auth/login/logout/protected-route runtime not exercised | Requires live project |
+| P0 | Live CRUD + RLS enforcement not exercised against a running DB | Requires live project + seed |
+| P1 | Investment child records (transactions, distributions, capital calls, metals) are add-only | Pre-existing gap; fixing would be feature work beyond validation |
+| P1 | Real-estate tenants/mortgages are add-only (no edit/delete UI) | Pre-existing gap |
+| P2 | Possible double-count if the same cash is entered in both Financial Hub `accounts` and Banking `bank_accounts` | Product/data-entry convention; documented |
+| P2 | No automated unit/integration test suite (Jest/Vitest) | Pre-existing |
+| P3 | Edge middleware Supabase warning | Upstream library / runtime choice |
+
+---
+
+## Supabase Actions You Must Perform Manually
+
+1. **Create/configure `.env.local`**
+   ```bash
+   cp .env.local.example .env.local
+   ```
+   Set real values:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+2. **Apply schema (preferred CLI path)**
+   ```bash
+   supabase db reset
+   # or: supabase db push
+   ```
+   This applies both:
+   - `20250705000000_casey_financial_os_schema.sql`
+   - `20250712000000_app_runtime_compat.sql`
+
+3. **Or apply modular SQL Editor path** (in order):  
+   `schema.sql` → `financial-hub-schema.sql` → `banking_schema.sql` → `real-estate-schema.sql` → `investment-schema.sql` → `tax-schema.sql` → `executive-schema.sql`
+
+4. **Create a test user** via Signup or Supabase Auth dashboard.
+
+5. **Load TEST seed** — replace `:USER_ID` in `database/seed.sql` and run in SQL Editor. Do not use real personal financial data.
+
+6. **Verify RLS** in SQL Editor:
+   ```sql
+   SELECT tablename, rowsecurity
+   FROM pg_tables
+   WHERE schemaname = 'public' AND rowsecurity = true
+   ORDER BY tablename;
+   ```
+
+7. **Auth redirect URL** — add `http://localhost:3000/auth/callback` (and production URL) under Supabase Auth URL configuration.
+
+8. **Storage buckets** (if using document uploads): private `property-documents`, `investment-documents`.
+
+---
+
+## Exact Manual Tests You Must Perform
+
+After configuring Supabase and loading TEST seed:
+
+### Auth
+1. Visit `/financial-hub` while logged out → redirected to `/login`
+2. Sign up with a test email/password
+3. Log in → lands on `/executive-dashboard`
+4. Log out from sidebar → returns to `/login`
+5. Confirm login/signup show a clear error if env vars are missing
+
+### Routes
+Open each route while authenticated and confirm it loads without runtime error:
+- `/executive-dashboard`
+- `/financial-hub`
+- `/banking`
+- `/real-estate`
+- `/investments`
+- `/tax`
+
+### CRUD (use only TEST-labeled records)
+For each entity below, perform Add → View → Edit → Delete:
+
+| Entity | Where |
+|--------|-------|
+| `accounts` | Financial Hub |
+| `assets` | Financial Hub |
+| `liabilities` | Financial Hub |
+| `income_sources` | Financial Hub |
+| `expenses` | Financial Hub |
+| `bank_accounts` | Banking |
+| `properties` | Real Estate |
+| `investments` | Investments |
+| `tax_years` | Tax Intelligence (delete via card Delete button) |
+
+### RLS isolation
+1. Create two users (A and B)
+2. As A, create a TEST account/asset/property
+3. As B, confirm those records are not visible
+4. Confirm B cannot update/delete A’s rows via the UI
+
+### Dashboard calculations
+With TEST seed loaded for one user, confirm Executive Dashboard / Financial Hub show values consistent with the table above (assets, liabilities, net worth, income, expenses, cash flow, passive income, RE NOI, investment gains).
+
+---
+
+## Prioritized Remaining Issues
+
+1. **P0 — Connect live Supabase** and apply both migrations (or modular SQL path)
+2. **P0 — Run the manual auth / CRUD / RLS checklist above**
+3. **P1 — Child-record edit/delete** for investments activities and real-estate tenants/mortgages (if needed for daily use)
+4. **P2 — Document data-entry convention** to avoid double-counting cash across Hub vs Banking
+5. **P2 — Add automated tests** for calculation modules
+6. **P3 — Edge runtime warning** from Supabase client in middleware
 
 ---
 
 ## Conclusion
 
-Casey Financial OS Apps 1–6 are **functionally complete and build-stable** on the validation branch. All routes load, CRUD operations are implemented for every required entity, dashboard calculations are wired to the correct tables, and RLS is defined in the canonical migration. The primary remaining step is **connecting a live Supabase instance** with the unified schema applied and seed data loaded for end-to-end runtime verification.
+Casey Financial OS Apps 1–6 are **build-stable and schema-aligned on this branch**. Routes, auth scaffolding, CRUD entry points, RLS definitions, and dashboard formulas were validated statically and offline. The remaining blocker for production confidence is connecting a live Supabase project, applying the compatibility migration, loading the synthetic TEST seed, and completing the manual checklist in this report.
