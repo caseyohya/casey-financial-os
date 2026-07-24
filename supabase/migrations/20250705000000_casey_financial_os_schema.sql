@@ -1572,7 +1572,7 @@ SELECT
     FROM public.accounts ac
     WHERE ac.user_id = ba.user_id
       AND ac.is_active
-      AND ac.account_type IN ('checking', 'savings', 'cash')
+      AND ac.account_type IN ('checking', 'savings')
       AND ac.currency_code = ba.currency_code
   ), 0) AS hub_cash_balance
 FROM public.bank_accounts ba
