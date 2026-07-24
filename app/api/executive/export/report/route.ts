@@ -13,7 +13,7 @@ export async function GET(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const data = await getExecutiveDashboardData({ year, month, country });
+  const { data } = await getExecutiveDashboardData({ year, month, country });
   const { kpis, alerts, whatChanged } = data;
   const monthName = new Date(year, month - 1).toLocaleString("en-US", { month: "long" });
   const c = kpis.currency;

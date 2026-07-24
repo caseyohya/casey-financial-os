@@ -4,8 +4,17 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { InputField, Button } from "@/components/forms/FormFields";
 import { APP_NAME } from "@/lib/utils/navigation";
+
+function formatAuthError(error: { message?: string; status?: number; code?: string } | null): string {
+  if (!error) return "Unknown authentication error.";
+  const parts = [error.message || "Signup failed."];
+  if (error.status) parts.push(`(status ${error.status})`);
+  if (error.code) parts.push(`[${error.code}]`);
+  return parts.join(" ");
+}
 
 export function SignupForm() {
   const [email, setEmail] = useState("");
@@ -22,24 +31,85 @@ export function SignupForm() {
     setMessage(null);
     setIsLoading(true);
 
-    const supabase = createClient();
-    const { error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { full_name: fullName },
-      },
-    });
-
-    if (authError) {
-      setError(authError.message);
+    if (!isSupabaseConfigured()) {
+      const configError =
+        "Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local, then restart the dev server.";
+      if (process.env.NODE_ENV === "development") {
+        console.error("[signup]", configError);
+      }
+      setError(configError);
       setIsLoading(false);
       return;
     }
 
-    setMessage("Account created. You can now sign in.");
-    setIsLoading(false);
-    setTimeout(() => router.push("/login"), 1500);
+    try {
+      const supabase = createClient();
+      const emailRedirectTo =
+        typeof window !== "undefined"
+          ? `${window.location.origin}/auth/callback`
+          : undefined;
+
+      const { data, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { full_name: fullName },
+          emailRedirectTo,
+        },
+      });
+
+      if (authError) {
+        if (process.env.NODE_ENV === "development") {
+          console.error("[signup] supabase.auth.signUp error:", authError);
+        }
+        setError(formatAuthError(authError));
+        setIsLoading(false);
+        return;
+      }
+
+      if (process.env.NODE_ENV === "development") {
+        console.info("[signup] success", {
+          userId: data.user?.id,
+          hasSession: Boolean(data.session),
+          identities: data.user?.identities?.length ?? 0,
+        });
+      }
+
+      // Supabase may return a user with empty identities when the email is already registered
+      // and "Confirm email" is enabled (anti-enumeration). Surface a clear message.
+      if (data.user && (data.user.identities?.length ?? 0) === 0 && !data.session) {
+        setError(
+          "An account with this email may already exist. Try signing in, or use a different email."
+        );
+        setIsLoading(false);
+        return;
+      }
+
+      if (data.session) {
+        setMessage("Account created successfully. Redirecting to your dashboard…");
+        setIsLoading(false);
+        router.push("/executive-dashboard");
+        router.refresh();
+        return;
+      }
+
+      if (data.user) {
+        setMessage(
+          "Account created. Check your email to confirm your address, then sign in. (If you do not receive an email, confirm Email provider settings in the Supabase dashboard.)"
+        );
+        setIsLoading(false);
+        return;
+      }
+
+      setError("Signup completed without a user or session. Please try again or check Supabase Auth logs.");
+      setIsLoading(false);
+    } catch (err) {
+      if (process.env.NODE_ENV === "development") {
+        console.error("[signup] unexpected error:", err);
+      }
+      setError(err instanceof Error ? err.message : "Unexpected signup error.");
+      setIsLoading(false);
+    }
   }
 
   return (
@@ -55,12 +125,18 @@ export function SignupForm() {
           className="rounded-xl border border-navy-700 bg-navy-900 p-6 space-y-4"
         >
           {error && (
-            <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
+            <div
+              role="alert"
+              className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400"
+            >
               {error}
             </div>
           )}
           {message && (
-            <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 text-sm text-emerald-400">
+            <div
+              role="status"
+              className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 text-sm text-emerald-400"
+            >
               {message}
             </div>
           )}

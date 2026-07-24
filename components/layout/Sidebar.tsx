@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   Building2,
   FileText,
@@ -9,12 +10,13 @@ import {
   Landmark,
   LayoutDashboard,
   LogOut,
+  Menu,
   TrendingUp,
+  X,
 } from "lucide-react";
 import { APP_NAME, NAV_ITEMS } from "@/lib/utils/navigation";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
 
 const iconMap = {
   LayoutDashboard,
@@ -33,6 +35,11 @@ export function Sidebar({ userEmail }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
 
   async function handleSignOut() {
     await supabase.auth.signOut();
@@ -40,8 +47,8 @@ export function Sidebar({ userEmail }: SidebarProps) {
     router.refresh();
   }
 
-  return (
-    <aside className="flex h-screen w-64 flex-col border-r border-navy-700 bg-navy-900">
+  const nav = (
+    <>
       <div className="border-b border-navy-700 px-6 py-5">
         <Link href="/executive-dashboard" className="block">
           <h1 className="text-lg font-semibold tracking-tight text-white">
@@ -87,6 +94,42 @@ export function Sidebar({ userEmail }: SidebarProps) {
           Sign out
         </button>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      <div className="sticky top-0 z-30 flex items-center justify-between border-b border-navy-700 bg-navy-900 px-4 py-3 lg:hidden">
+        <Link href="/executive-dashboard" className="text-sm font-semibold text-white">
+          {APP_NAME}
+        </Link>
+        <button
+          type="button"
+          aria-label={open ? "Close navigation" : "Open navigation"}
+          onClick={() => setOpen((value) => !value)}
+          className="rounded-lg p-2 text-slate-300 hover:bg-navy-800"
+        >
+          {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        </button>
+      </div>
+
+      {open && (
+        <button
+          type="button"
+          aria-label="Close navigation overlay"
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          onClick={() => setOpen(false)}
+        />
+      )}
+
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-navy-700 bg-navy-900 transition-transform duration-200 lg:static lg:translate-x-0",
+          open ? "translate-x-0" : "-translate-x-full"
+        )}
+      >
+        {nav}
+      </aside>
+    </>
   );
 }
