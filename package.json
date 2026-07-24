@@ -6,7 +6,9 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "db:push": "./scripts/apply-supabase-migrations.sh",
+    "db:link": "supabase link --project-ref kupfikpehfhltjwmnemt"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",
@@ -28,6 +30,7 @@
     "eslint": "^9.27.0",
     "eslint-config-next": "^15.3.3",
     "postcss": "^8.5.4",
+    "supabase": "^2.109.1",
     "tailwindcss": "^4.1.8",
     "typescript": "^5.8.3"
   }

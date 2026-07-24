@@ -19,6 +19,11 @@ export async function GET(request: Request) {
     if (!error) {
       return NextResponse.redirect(`${origin}${next}`);
     }
+    if (process.env.NODE_ENV === "development") {
+      console.error("[auth/callback] exchangeCodeForSession failed:", error);
+    }
+  } else if (process.env.NODE_ENV === "development") {
+    console.error("[auth/callback] missing code query param");
   }
 
   return NextResponse.redirect(`${origin}/login?error=auth_callback_error`);
