@@ -4,8 +4,26 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { InputField, Button } from "@/components/forms/FormFields";
 import { APP_NAME } from "@/lib/utils/navigation";
+
+function logAuthError(context: string, error: unknown) {
+  if (process.env.NODE_ENV === "development") {
+    console.error(`[auth:${context}]`, error);
+  }
+}
+
+function formatSignupError(error: { message: string; status?: number; name?: string }) {
+  if (
+    error.message === "fetch failed" ||
+    error.name === "AuthRetryableFetchError" ||
+    error.status === 0
+  ) {
+    return "Unable to reach Supabase. Check that NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local point to a real project, then restart the dev server.";
+  }
+  return error.message;
+}
 
 export function SignupForm() {
   const [email, setEmail] = useState("");
@@ -22,24 +40,66 @@ export function SignupForm() {
     setMessage(null);
     setIsLoading(true);
 
-    const supabase = createClient();
-    const { error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { full_name: fullName },
-      },
-    });
-
-    if (authError) {
-      setError(authError.message);
+    if (!isSupabaseConfigured()) {
+      const configError =
+        "Supabase is not configured. Copy .env.local.example to .env.local, set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY, then restart the dev server.";
+      logAuthError("signUp", configError);
+      setError(configError);
       setIsLoading(false);
       return;
     }
 
-    setMessage("Account created. You can now sign in.");
-    setIsLoading(false);
-    setTimeout(() => router.push("/login"), 1500);
+    try {
+      const supabase = createClient();
+      const { data, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { full_name: fullName },
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+
+      if (authError) {
+        logAuthError("signUp", authError);
+        setError(formatSignupError(authError));
+        setIsLoading(false);
+        return;
+      }
+
+      // Supabase may return a user with empty identities when the email is already registered.
+      const identities = data.user?.identities ?? null;
+      if (data.user && identities && identities.length === 0) {
+        const duplicateMessage =
+          "An account with this email already exists. Sign in instead, or reset your password.";
+        logAuthError("signUp", duplicateMessage);
+        setError(duplicateMessage);
+        setIsLoading(false);
+        return;
+      }
+
+      if (data.session) {
+        setMessage("Account created successfully. Redirecting to your dashboard…");
+        setIsLoading(false);
+        router.push("/executive-dashboard");
+        router.refresh();
+        return;
+      }
+
+      // Email confirmation is enabled — null session is expected, not an error.
+      setMessage(
+        "Account created. Check your email for a confirmation link before signing in."
+      );
+      setIsLoading(false);
+    } catch (err) {
+      logAuthError("signUp", err);
+      const fallback =
+        err instanceof Error
+          ? err.message
+          : "An unexpected error occurred during signup.";
+      setError(formatSignupError({ message: fallback }));
+      setIsLoading(false);
+    }
   }
 
   return (
@@ -55,12 +115,18 @@ export function SignupForm() {
           className="rounded-xl border border-navy-700 bg-navy-900 p-6 space-y-4"
         >
           {error && (
-            <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
+            <div
+              role="alert"
+              className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400"
+            >
               {error}
             </div>
           )}
           {message && (
-            <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 text-sm text-emerald-400">
+            <div
+              role="status"
+              className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 text-sm text-emerald-400"
+            >
               {message}
             </div>
           )}

@@ -4,8 +4,26 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { InputField, Button } from "@/components/forms/FormFields";
 import { APP_NAME } from "@/lib/utils/navigation";
+
+function logAuthError(context: string, error: unknown) {
+  if (process.env.NODE_ENV === "development") {
+    console.error(`[auth:${context}]`, error);
+  }
+}
+
+function formatLoginError(error: { message: string; status?: number; name?: string }) {
+  if (
+    error.message === "fetch failed" ||
+    error.name === "AuthRetryableFetchError" ||
+    error.status === 0
+  ) {
+    return "Unable to reach Supabase. Check that NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local point to a real project, then restart the dev server.";
+  }
+  return error.message;
+}
 
 export function LoginForm() {
   const [email, setEmail] = useState("");
@@ -19,20 +37,40 @@ export function LoginForm() {
     setError(null);
     setIsLoading(true);
 
-    const supabase = createClient();
-    const { error: authError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (authError) {
-      setError(authError.message);
+    if (!isSupabaseConfigured()) {
+      const configError =
+        "Supabase is not configured. Copy .env.local.example to .env.local, set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY, then restart the dev server.";
+      logAuthError("signInWithPassword", configError);
+      setError(configError);
       setIsLoading(false);
       return;
     }
 
-    router.push("/executive-dashboard");
-    router.refresh();
+    try {
+      const supabase = createClient();
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (authError) {
+        logAuthError("signInWithPassword", authError);
+        setError(formatLoginError(authError));
+        setIsLoading(false);
+        return;
+      }
+
+      router.push("/executive-dashboard");
+      router.refresh();
+    } catch (err) {
+      logAuthError("signInWithPassword", err);
+      const fallback =
+        err instanceof Error
+          ? err.message
+          : "An unexpected error occurred during sign in.";
+      setError(formatLoginError({ message: fallback }));
+      setIsLoading(false);
+    }
   }
 
   return (
@@ -48,7 +86,10 @@ export function LoginForm() {
           className="rounded-xl border border-navy-700 bg-navy-900 p-6 space-y-4"
         >
           {error && (
-            <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
+            <div
+              role="alert"
+              className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400"
+            >
               {error}
             </div>
           )}
